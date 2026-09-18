@@ -233,6 +233,12 @@ The host app lives in the OHIF fork under `apps/host-app`, with the contract in 
 
 React `useReducer`, not Redux or Zustand. One page, small state, explicit event-driven transitions, and stale-event handling that is easy to read and to explain live. Rows move `waiting → drawing → ready`; actions are explicit (`ADD_ROW`, `ACTIVATE_REQUESTED`, `ACTIVATION_QUEUED`, `ACTIVATION_CANCELLED`, `MEASUREMENT_RECEIVED`, …) rather than scattered booleans.
 
+### 10.9a `esbuild` build script and the `vite>rollup` override — closed in PR 1
+
+`allowBuilds: { esbuild: true }` was required: without it `pnpm install --no-frozen-lockfile` fails with `ERR_PNPM_IGNORED_BUILDS`, because Vite depends on esbuild's postinstall to fetch its platform binary.
+
+A second, unanticipated issue surfaced only once the host app's dev server was actually started: the workspace's blanket `rollup: 2.80.0` override (synced from upstream OHIF, `pnpm-workspace.yaml`) is older than what Vite 5's bundled Rollup requires — it lacks the `./parseAst` subpath export, so `vite` crashed on boot with `ERR_PACKAGE_PATH_NOT_EXPORTED`. **Rationale for the fix:** rather than bump the shared `rollup` override (which upstream OHIF's own tooling may depend on staying at `2.80.0`), a more specific selector override, `'vite>rollup': 4.24.0`, was added alongside it — pnpm applies the most specific matching override, so this only changes the Rollup that Vite itself resolves, leaving every other consumer of the shared pin untouched. Verified: host dev server boots and serves `200` on `:5173`; `pnpm run build` (the viewer) still succeeds unaffected.
+
 ### 10.9 Why `postMessage`
 
 It is the mechanism for cross-origin parent/iframe communication, needs no backend, and makes the trust boundary explicit via `targetOrigin` plus origin checks. Same-origin would technically allow direct object access, but that couples two independently developed apps to each other's internals — a message contract stays worthwhile even then. `BroadcastChannel` suits same-origin tab fan-out rather than targeted parent↔child request/response; a WebSocket or backend adds infrastructure for two contexts on one client; Module Federation solves code composition, not this runtime integration.
@@ -247,7 +253,6 @@ Recorded honestly rather than hidden. Each is tracked with its target PR in `doc
 | Activation API — the `commandsManager` path the assignment names vs. `toolbarService.recordInteraction`, which also refreshes the toolbar highlight. | PR 3 |
 | How an activation failure is reported to the host (retry, a new message type, or leave the row `waiting`). | PR 3 |
 | Readiness fallback when the study or hanging protocol fails and the OHIF readiness event never fires. | PR 2 |
-| Whether the Vite host app needs `esbuild` added to `pnpm-workspace.yaml` `allowBuilds`. | PR 1 |
 | Contract test location — `packages/*` sits outside the root Jest project globs. | PR 5 |
 
 Accepted scope limits: one host page with one viewer iframe (multiple iframes would need a channel ID in the envelope); no acknowledgements, retries or idempotency keys; no state persistence across reload unless star task 5.6 is done; `MEASUREMENT_UPDATED` is delivered unthrottled on the assumption that a tiny form can absorb drag-rate updates — to be revisited if measured otherwise.
