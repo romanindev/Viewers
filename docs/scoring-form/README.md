@@ -1,8 +1,8 @@
 # Viewer + Scoring Form — setup guide
 
-> ## ⚠ Status: PLANNED — nothing in this guide works yet
+> ## ⚠ Status: PR 1 done — host shell only, no handshake yet
 >
-> At the current commit this repository contains **documentation only**. No host app, no bridge extension, and no message contract exist. Every step below is marked with the PR that makes it real.
+> The host app, the shared message contract, and the workspace wiring exist and are verified working. No bridge extension, no `VIEWER_READY`, no measurement handling exist yet. The host stays in "viewer not ready" for the whole session — that is expected until PR 2.
 >
 > Do not follow this guide expecting a working screen until the status table shows PR 1–5 as done.
 
@@ -20,11 +20,12 @@ The repository root `README.md` is the **upstream OHIF readme** and is deliberat
 |---|---|---|
 | Prerequisites documented | ✅ yes | — |
 | Clone command shows the real public fork URL | ⬜ not yet — placeholder `<this-fork>` | PR 6 |
-| Install (`pnpm run install:update-lockfile`) | ⬜ not yet — `apps/*` / `packages/*` do not exist | PR 1 |
+| Install (`pnpm run install:update-lockfile`) | ✅ yes — verified on this checkout | PR 1 |
 | Viewer starts on `:3000` and opens a study | ✅ yes (unmodified upstream OHIF) | baseline |
-| Exact `StudyInstanceUID` recorded and verified | ⬜ not yet — see the "Known-good study" TODO | PR 1, re-verified PR 6 |
+| Exact `StudyInstanceUID` recorded and verified | ✅ yes — see "Known-good study" below | PR 1 |
 | Clean-machine run of this guide, verbatim | ⬜ not yet | PR 6 |
-| Host app starts on `:5173` and shows the viewer in an iframe | ⬜ not yet | PR 1 |
+| Host app starts on `:5173` and shows the viewer in an iframe | ✅ yes | PR 1 |
+| Host `message` listener installed before iframe `src`, rejects wrong origin/version | ✅ yes (logs only, no handshake) | PR 1 |
 | Viewer announces `VIEWER_READY` | ⬜ not yet | PR 2 |
 | Activate a row → `EllipticalROI` becomes active | ⬜ not yet | PR 3 |
 | Drawn ellipse lands in the correct row with its unit | ⬜ not yet | PR 4 |
@@ -36,10 +37,10 @@ The repository root `README.md` is the **upstream OHIF readme** and is deliberat
 |---|---|
 | OHIF version | `3.14.0-beta.29` |
 | Baseline commit | `1ec01348d` |
-| Node | `24.15.0` (see `.node-version`; `engines.node: >=24`) |
+| Node | `24.15.0` (see `.node-version`; `engines.node: >=24`) — verified working with `v24.21.0` |
 | pnpm | `11.5.2` (see `package.json` `packageManager`) |
 | Viewer origin | `http://localhost:3000` |
-| Host origin | `http://localhost:5173` (planned) |
+| Host origin | `http://localhost:5173` — verified, `strictPort: true` |
 
 ## Prerequisites
 
@@ -81,7 +82,12 @@ OHIF_OPEN=false pnpm run dev
 pnpm --filter host-app run dev
 ```
 
-Then open **`http://localhost:5173`**.
+Then open **`http://localhost:5173`**. The host renders a two-column layout —
+a full-height iframe with the OHIF viewer on the left, a scoring-panel
+placeholder on the right — and installs its `message` listener before the
+iframe `src` is assigned. Nothing sends `VIEWER_READY` yet (that is PR 2), so
+the host has no ready/not-ready UI state to show in this PR; the listener
+only logs accepted/rejected messages to the devtools console.
 
 ## Known-good study
 
@@ -91,7 +97,17 @@ The viewer opens a specific study directly, which is the form the iframe URL tak
 http://localhost:3000/viewer?StudyInstanceUIDs=<StudyInstanceUID>
 ```
 
-> **TODO (PR 1):** record the exact `StudyInstanceUID` used for the demo here, verified against the default public DICOMweb source, along with a one-line note on which series is used and that `EllipticalROI` produces an area in `mm²` on it.
+The host app's default (`apps/host-app/src/config.ts`, overridable via
+`VITE_VIEWER_STUDY_URL`) is:
+
+```
+http://localhost:3000/viewer?StudyInstanceUIDs=1.3.6.1.4.1.25403.345050719074.3824.20170125095438.5
+```
+
+Verified against the default public AWS S3 DICOMweb source
+(`platform/app/public/config/dev.js`) — the same study used by upstream
+OHIF's own "Measurement Tracking" demo link (root `README.md`). It loads an
+MR series with pixel spacing, so `EllipticalROI` yields an area in `mm²`.
 
 ## Troubleshooting
 
@@ -101,6 +117,8 @@ http://localhost:3000/viewer?StudyInstanceUIDs=<StudyInstanceUID>
 | Install rejects a dependency as too new | `minimumReleaseAge: 2880` (48 h); pin an older exact version |
 | Host loads but the iframe is blank | Viewer not running on `:3000`, or the `StudyInstanceUIDs` value is wrong |
 | Host never leaves "viewer not ready" | Expected before PR 2. Afterwards, see `ARCHITECTURE.md` (repo root) §6, and `IMPLEMENTATION_NOTES.md` §3 (this directory) |
+| `pnpm --filter host-app run dev` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED ... rollup/package.json ... './parseAst'` | The workspace-wide `rollup: 2.80.0` override (synced from upstream, `pnpm-workspace.yaml`) is older than what Vite 5's bundled Rollup needs. Fixed by the scoped `'vite>rollup': 4.24.0` override added alongside it — re-run `pnpm run install:update-lockfile` if you see this. |
+| `pnpm run install:update-lockfile` hangs indefinitely with no CPU/network activity | Observed once in this environment as an apparent pnpm store-index deadlock, unrelated to any of our changes. Kill the `pnpm install` process and retry; it completed normally (`Done in ~4-9s`) on the next attempt. |
 
 ## Further reading
 

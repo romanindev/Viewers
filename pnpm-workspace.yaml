@@ -2,6 +2,8 @@ packages:
   - platform/*
   - extensions/*
   - modes/*
+  - apps/*
+  - packages/*
 
 # Mirror the cornerstone3D pnpm setup (libs/@cornerstonejs) which is known-good.
 nodeLinker: hoisted
@@ -42,6 +44,10 @@ allowBuilds:
   core-js: true
   core-js-pure: true
   cypress: true
+  # Vite (host-app dev dependency) depends on esbuild's postinstall to fetch
+  # its platform binary; without this the install fails with
+  # ERR_PNPM_IGNORED_BUILDS. See docs/scoring-form/IMPLEMENTATION_NOTES.md §10 item 6.
+  esbuild: true
   protobufjs: true
   sharp: true
 overrides:
@@ -59,6 +65,11 @@ overrides:
   trim: 1.0.1
   package-json: 8.1.1
   rollup: 2.80.0
+  # The blanket `rollup: 2.80.0` pin above (synced from upstream OHIF) is too
+  # old for Vite 5's bundled rollup, which needs the `./parseAst` subpath
+  # export added in rollup 4 — the host-app dev server fails to boot
+  # (ERR_PACKAGE_PATH_NOT_EXPORTED) without this more specific override.
+  'vite>rollup': 4.24.0
   body-parser: 1.20.3
   axios: 1.18.1
   core-js: 3.45.1

@@ -27,7 +27,8 @@
       "@ohif/mode-ultrasound-pleura-bline": ["./modes/usAnnotation/src"],
       "@ohif/extension-cornerstone": ["./extensions/cornerstone/src"],
       "@ohif/extension-dicom-pdf": ["./extensions/dicom-pdf/src"],
-      "@state": ["./platform/app/src/state"]
+      "@state": ["./platform/app/src/state"],
+      "@scoring-form/message-contract": ["./packages/message-contract/src"]
     }
   },
   "include": [
@@ -35,7 +36,8 @@
     "platform/**/public/**/*",
     "extensions/**/src/**/*",
     "modes/**/src/**/*",
-    "tests/**/*"
+    "tests/**/*",
+    "packages/**/src/**/*"
   ],
   "exclude": ["node_modules", "dist"]
 }
