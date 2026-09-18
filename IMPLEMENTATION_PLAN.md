@@ -48,17 +48,23 @@ Audit corrections that change this plan:
 3. **Default primary tool is `WindowLevel`, not `Pan`** — `modes/basic/src/initToolGroups.ts:20-37`. See `ARCHITECTURE.md` §6 and §10.7.
 4. **Repository-wide typecheck is impossible** (6,981 pre-existing errors, `TS5053` on `--noEmit`, no `typecheck` script). Scoped checks only — see `docs/scoring-form/IMPLEMENTATION_NOTES.md` §9.1.
 5. **`setToolActive` fails silently** — `extensions/cornerstone/src/commandsModule.ts:1214-1228`. Activation must be read back. See `ARCHITECTURE.md` §6 and `docs/scoring-form/IMPLEMENTATION_NOTES.md` §3.2.
-6. **`cachedStats` timing is an open risk** blocking PR 4 — `docs/scoring-form/IMPLEMENTATION_NOTES.md` §5.3 and §10 item 1.
+6. **`cachedStats` timing is an open risk** blocking PR 5 — `docs/scoring-form/IMPLEMENTATION_NOTES.md` §5.3 and §10 item 1.
 
 Baseline is fixed. Do not re-select or move it.
 
-## PR 1 — `chore: bootstrap host app and task workspace`
+## PR 1 — `docs: establish assignment requirements and implementation plan` — ✅ COMPLETE
+
+Merged as GitHub PR #1, commit `44a2a904a`. Produced `TASK.md`, `TASK_INSTRUCTIONS.md`, `ARCHITECTURE.md` and this implementation plan from a read-only audit of the baseline OHIF checkout. No application code, no workspace changes. See those documents directly for content; not duplicated here.
+
+## PR 2 — `feat: bootstrap host app and shared message contract` — ✅ COMPLETE
+
+Merged as GitHub PR #2, commit `b2c5f4a4d`. Internally referred to below by its original working title, `chore: bootstrap host app and task workspace` — the scope described matches what was actually merged.
 
 ### Goal
 
 Create the host shell, the shared protocol package, and the workspace wiring — with **zero OHIF behavior change**.
 
-### Explicitly OUT of scope for PR 1
+### Explicitly OUT of scope for PR 2
 
 This PR contains **no OHIF extension and no working handshake**. Specifically excluded:
 
@@ -107,7 +113,7 @@ ARCHITECTURE.md        message table rows for every type defined in this PR;
                        Accepted Decisions entries for what was actually decided here
 ```
 
-The repository root `README.md` is **upstream OHIF's and stays untouched in this PR**. The task setup guide lives at `docs/scoring-form/README.md`. Adding a discoverable pointer from the root README is a submission requirement tracked in PR 6.
+The repository root `README.md` is **upstream OHIF's and stays untouched in this PR**. The task setup guide lives at `docs/scoring-form/README.md`. Adding a discoverable pointer from the root README is a submission requirement tracked in PR 7.
 
 **[VERIFIED]** no `pluginConfig.json` change is needed for the host app or contract package — `platform/app/.webpack/writePluginImportsFile.js:126-225` ignores any workspace package not declared there, so adding workspace globs cannot alter the viewer build.
 
@@ -162,7 +168,7 @@ change is inert.
 
 ## Not in this PR
 No OHIF extension, no pluginConfig change, no VIEWER_READY. The host will
-correctly stay in the "viewer not ready" state — the handshake lands in PR 2.
+correctly stay in the "viewer not ready" state — the handshake lands in PR 3.
 The setup guide's status table says so explicitly; nothing claims to work yet.
 
 ## Verified
@@ -174,7 +180,7 @@ The setup guide's status table says so explicitly; nothing claims to work yet.
 - pnpm run build succeeds; git diff --stat shows no OHIF source changes
 ```
 
-## PR 2 — `feat: add OHIF bridge extension and readiness handshake`
+## PR 3 — `feat: add OHIF bridge extension and readiness handshake` — 🔜 NEXT (not started)
 
 ### Goal
 
@@ -213,7 +219,7 @@ Create the viewer-side bridge and a trustworthy `VIEWER_READY`.
 - viewer still loads a normal study with the extension registered;
 - broken-study case behaves per the chosen fallback.
 
-## PR 3 — `feat: activate and cancel ellipse from scoring form`
+## PR 4 — `feat: activate and cancel ellipse from scoring form`
 
 ### Goal
 
@@ -258,7 +264,7 @@ Critical cases:
 5. unknown / wrong-version messages are ignored;
 6. an activation attempted with no viewport/tool group is detected as a failure rather than silently arming the row.
 
-## PR 4 — `feat: correlate OHIF measurements with form rows`
+## PR 5 — `feat: correlate OHIF measurements with form rows`
 
 ### Goal
 
@@ -319,7 +325,7 @@ Do not implement a mitigation before step 4, and do not present a guess as verif
 - an Escape-cancelled partial ellipse does not corrupt a row;
 - stale activation event cannot overwrite a newer activation.
 
-## PR 5 — `feat: add unit-safe totals and final required UX`
+## PR 6 — `feat: add unit-safe totals and final required UX`
 
 ### Goal
 
@@ -352,7 +358,7 @@ Demo script:
 
 At this point the mandatory scope should be submission-quality.
 
-## PR 6 — `docs: finalize architecture, runbook, and AI usage`
+## PR 7 — `docs: finalize architecture, runbook, and AI usage`
 
 ### Goal
 
@@ -396,9 +402,9 @@ All four are hard gates. The assignment states the reviewer's steps will be exec
 - [ ] **Verified exact `StudyInstanceUID` and a working direct viewer URL.** Record the real UID — not a placeholder — and paste the full working URL in the form `http://localhost:3000/viewer?StudyInstanceUIDs=<uid>`. Confirm against the default public DICOMweb source that the study loads and that `EllipticalROI` yields an area in `mm²` on it.
 - [ ] **Clean-machine setup verification using only the documented commands.** Fresh clone or clean worktree, no undeclared global dependencies, no hidden local config, nothing carried over from the development checkout. Follow the guide verbatim, top to bottom, and fix the guide — not the machine — wherever it fails. Record in the PR body what was run and on what.
 
-## PR 7 — optional `feat: sync live measurement updates`
+## PR 8 — optional `feat: sync live measurement updates`
 
-Only after PR 1–6 required scope is stable.
+Only after PR 1–7 required scope is stable.
 
 ### Viewer
 
@@ -421,7 +427,7 @@ Start with direct updates because the UI is tiny.
 
 If actual frequency causes excessive renders, throttle/debounce UI updates while guaranteeing the final update is delivered. Document the trade-off.
 
-## PR 8 — optional `feat: synchronize measurement deletion`
+## PR 9 — optional `feat: synchronize measurement deletion`
 
 Only if enough time remains.
 

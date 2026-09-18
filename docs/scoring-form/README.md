@@ -1,10 +1,10 @@
 # Viewer + Scoring Form — setup guide
 
-> ## ⚠ Status: PR 1 done — host shell only, no handshake yet
+> ## ⚠ Status: PR 2 done (merged, `b2c5f4a4d`) — host shell only, no handshake yet
 >
-> The host app, the shared message contract, and the workspace wiring exist and are verified working. No bridge extension, no `VIEWER_READY`, no measurement handling exist yet. The host stays in "viewer not ready" for the whole session — that is expected until PR 2.
+> **What already works:** the host app starts on `:5173`, renders the two-column layout, and the OHIF viewer loads inside the iframe at the configured study URL — both verified running. **What does not exist yet:** the complete scoring workflow. There is no bridge extension, no `VIEWER_READY`, no tool activation, no measurement handling, and no totals — the host stays in "viewer not ready" for the whole session, which is expected until PR 3 (not started) and the PRs after it land.
 >
-> Do not follow this guide expecting a working screen until the status table shows PR 1–5 as done.
+> The host app and embedded viewer are already functional. The complete scoring workflow will be available after PR 6.
 
 ## Why this file is here
 
@@ -12,24 +12,24 @@ The assignment (`ASSIGNMENT.pdf` p.4 §7.2) requires a `README.md` that takes a 
 
 The repository root `README.md` is the **upstream OHIF readme** and is deliberately left untouched for now, so that the fork stays close to upstream and the diff stays reviewable.
 
-> **Required before submission:** add a short, discoverable pointer from the root `README.md` to this file. A reviewer who clones the repository and opens the root readme must be able to find these instructions without being told they exist. Tracked as a deliverable in `IMPLEMENTATION_PLAN.md` PR 6.
+> **Required before submission:** add a short, discoverable pointer from the root `README.md` to this file. A reviewer who clones the repository and opens the root readme must be able to find these instructions without being told they exist. Tracked as a deliverable in `IMPLEMENTATION_PLAN.md` PR 7.
 
 ## Status
 
 | Step | Works? | Delivered by |
 |---|---|---|
 | Prerequisites documented | ✅ yes | — |
-| Clone command shows the real public fork URL | ⬜ not yet — placeholder `<this-fork>` | PR 6 |
-| Install (`pnpm run install:update-lockfile`) | ✅ yes — verified on this checkout | PR 1 |
+| Clone command shows the real public fork URL | ⬜ not yet — placeholder `<this-fork>` | PR 7 |
+| Install (`pnpm run install:update-lockfile`) | ✅ yes — verified on this checkout | PR 2 |
 | Viewer starts on `:3000` and opens a study | ✅ yes (unmodified upstream OHIF) | baseline |
-| Exact `StudyInstanceUID` recorded and verified | ✅ yes — see "Known-good study" below | PR 1 |
-| Clean-machine run of this guide, verbatim | ⬜ not yet | PR 6 |
-| Host app starts on `:5173` and shows the viewer in an iframe | ✅ yes | PR 1 |
-| Host `message` listener installed before iframe `src`, rejects wrong origin/version | ✅ yes (logs only, no handshake) | PR 1 |
-| Viewer announces `VIEWER_READY` | ⬜ not yet | PR 2 |
-| Activate a row → `EllipticalROI` becomes active | ⬜ not yet | PR 3 |
-| Drawn ellipse lands in the correct row with its unit | ⬜ not yet | PR 4 |
-| Unit-safe totals at the bottom of the form | ⬜ not yet | PR 5 |
+| Exact `StudyInstanceUID` recorded and verified | ✅ yes — see "Known-good study" below | PR 2 |
+| Clean-machine run of this guide, verbatim | ⬜ not yet | PR 7 |
+| Host app starts on `:5173` and shows the viewer in an iframe | ✅ yes | PR 2 |
+| Host `message` listener installed before iframe `src`, rejects wrong origin/version | ✅ yes (logs only, no handshake) | PR 2 |
+| Viewer announces `VIEWER_READY` | ⬜ not yet — not started | PR 3 |
+| Activate a row → `EllipticalROI` becomes active | ⬜ not yet | PR 4 |
+| Drawn ellipse lands in the correct row with its unit | ⬜ not yet | PR 5 |
+| Unit-safe totals at the bottom of the form | ⬜ not yet | PR 6 |
 
 ## Verified baseline
 
@@ -52,7 +52,7 @@ The repository root `README.md` is the **upstream OHIF readme** and is deliberat
 ## Install
 
 ```bash
-git clone <this-fork>          # TODO (PR 6): replace with the real public fork URL
+git clone <this-fork>          # TODO (PR 7): replace with the real public fork URL
 cd Viewers
 pnpm run install:update-lockfile
 ```
@@ -76,7 +76,7 @@ OHIF_OPEN=false pnpm run dev
 
 `OHIF_OPEN=false` suppresses the automatic browser tab, which is noise when the viewer is meant to be consumed inside the host's iframe. The port is `3000` by default and can be overridden with `OHIF_PORT`.
 
-### Terminal 2 — host app, port 5173 *(PR 1)*
+### Terminal 2 — host app, port 5173 *(PR 2, done)*
 
 ```bash
 pnpm --filter host-app run dev
@@ -85,7 +85,7 @@ pnpm --filter host-app run dev
 Then open **`http://localhost:5173`**. The host renders a two-column layout —
 a full-height iframe with the OHIF viewer on the left, a scoring-panel
 placeholder on the right — and installs its `message` listener before the
-iframe `src` is assigned. Nothing sends `VIEWER_READY` yet (that is PR 2), so
+iframe `src` is assigned. Nothing sends `VIEWER_READY` yet (that is PR 3, not started), so
 the host has no ready/not-ready UI state to show in this PR; the listener
 only logs accepted/rejected messages to the devtools console.
 
@@ -116,7 +116,7 @@ MR series with pixel spacing, so `EllipticalROI` yields an area in `mm²`.
 | `pnpm install` fails complaining about the lockfile | Used plain `pnpm install`; use `pnpm run install:update-lockfile` |
 | Install rejects a dependency as too new | `minimumReleaseAge: 2880` (48 h); pin an older exact version |
 | Host loads but the iframe is blank | Viewer not running on `:3000`, or the `StudyInstanceUIDs` value is wrong |
-| Host never leaves "viewer not ready" | Expected before PR 2. Afterwards, see `ARCHITECTURE.md` (repo root) §6, and `IMPLEMENTATION_NOTES.md` §3 (this directory) |
+| Host never leaves "viewer not ready" | Expected before PR 3 lands. Afterwards, see `ARCHITECTURE.md` (repo root) §6, and `IMPLEMENTATION_NOTES.md` §3 (this directory) |
 | `pnpm --filter host-app run dev` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED ... rollup/package.json ... './parseAst'` | The workspace-wide `rollup: 2.80.0` override (synced from upstream, `pnpm-workspace.yaml`) is older than what Vite 5's bundled Rollup needs. Fixed by the scoped `'vite>rollup': 4.24.0` override added alongside it — re-run `pnpm run install:update-lockfile` if you see this. |
 | `pnpm run install:update-lockfile` hangs indefinitely with no CPU/network activity | Observed once in this environment as an apparent pnpm store-index deadlock, unrelated to any of our changes. Kill the `pnpm install` process and retry; it completed normally (`Done in ~4-9s`) on the next attempt. |
 

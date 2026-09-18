@@ -2,7 +2,7 @@
 
 Bridge between an OHIF Viewer fork in an iframe and a React scoring form on a different origin, communicating over `window.postMessage`.
 
-> **Status.** Design document. At the current commit the repository contains documentation only — no host app, bridge extension, or contract package exists yet. Behaviour described in the present tense is the **agreed design**, not shipped code; see `docs/scoring-form/README.md` for what actually runs today.
+> **Status.** Design document, partially implemented. As of GitHub PR #2 (`b2c5f4a4d`), the host app (`apps/host-app`) and the shared message contract (`packages/message-contract`) exist and are verified working — see `docs/scoring-form/README.md` for what is actually confirmed. The **viewer bridge OHIF extension and the `VIEWER_READY` handshake do not exist yet** (`extensions/scoring-form-bridge` is not created, `platform/app/pluginConfig.json` is unmodified) — that is PR #3, not started. Behaviour in §5–§9 below describing viewer-side bridge logic, activation, measurement correlation, and tool restoration is still the **agreed design**, not shipped code, until PR #3 onward lands it.
 >
 > **Scope.** Deliberately short, as the assignment asks (`ASSIGNMENT.pdf` p.4 §7.2 — *"1–2 pages is enough, but substantive"*). Supporting evidence, `file:line` citations and open technical questions live in **`docs/scoring-form/IMPLEMENTATION_NOTES.md`**.
 >
@@ -154,6 +154,8 @@ Small explicit guards in the shared package, no schema library — the protocol 
 
 **[PDF** p.3 §4.3 step 6**]** requires *«інструмент у переглядачі вимикається сам (повертається Pan/дефолт)»* — "the tool switches itself off (returns to Pan/default)". The binding obligation is the automatic switch-off; "Pan/default" is a parenthetical offering two options, and its slash shows the author treats them as the same thing. Restoring `WindowLevel` **satisfies that requirement through the «дефолт» (default) option** — it is not a deviation. The target tool is a single named constant in the bridge, so it can be changed live in seconds. Rejected alternatives, including the capture-and-restore design this replaces: `docs/scoring-form/IMPLEMENTATION_NOTES.md` §4.
 
+> **[OPEN] Documentation inconsistency, not yet resolved.** `IMPLEMENTATION_PLAN.md` PR 4 ("activate and cancel ellipse from scoring form") still describes the deactivation path as "restore what was captured" / "captured tool restored" — the capture-and-restore design that this Accepted Decision explicitly rejects in favor of always activating the fixed `WindowLevel` constant. This is flagged here rather than silently fixed; PR 4 needs an explicit pass to align its wording (and any code written against it) with this section before that PR is implemented.
+
 ## 7. Units and totals
 
 **[PDF** p.3 §5.6**]** area arrives in `mm²` or `px²` depending on DICOM pixel spacing; units must not be lost and unlike units must not be summed.
@@ -233,7 +235,7 @@ The host app lives in the OHIF fork under `apps/host-app`, with the contract in 
 
 React `useReducer`, not Redux or Zustand. One page, small state, explicit event-driven transitions, and stale-event handling that is easy to read and to explain live. Rows move `waiting → drawing → ready`; actions are explicit (`ADD_ROW`, `ACTIVATE_REQUESTED`, `ACTIVATION_QUEUED`, `ACTIVATION_CANCELLED`, `MEASUREMENT_RECEIVED`, …) rather than scattered booleans.
 
-### 10.9a `esbuild` build script and the `vite>rollup` override — closed in PR 1
+### 10.9a `esbuild` build script and the `vite>rollup` override — closed in PR 2
 
 `allowBuilds: { esbuild: true }` was required: without it `pnpm install --no-frozen-lockfile` fails with `ERR_PNPM_IGNORED_BUILDS`, because Vite depends on esbuild's postinstall to fetch its platform binary.
 
@@ -249,11 +251,11 @@ Recorded honestly rather than hidden. Each is tracked with its target PR in `doc
 
 | **[OPEN]** item | Target PR |
 |---|---|
-| `cachedStats` timing — whether the area is final at `MEASUREMENT_ADDED`, or `null`/stale for a fast draw. Needs a logged real event before a mitigation is chosen. | PR 4 |
-| Activation API — the `commandsManager` path the assignment names vs. `toolbarService.recordInteraction`, which also refreshes the toolbar highlight. | PR 3 |
-| How an activation failure is reported to the host (retry, a new message type, or leave the row `waiting`). | PR 3 |
-| Readiness fallback when the study or hanging protocol fails and the OHIF readiness event never fires. | PR 2 |
-| Contract test location — `packages/*` sits outside the root Jest project globs. | PR 5 |
+| `cachedStats` timing — whether the area is final at `MEASUREMENT_ADDED`, or `null`/stale for a fast draw. Needs a logged real event before a mitigation is chosen. | PR 5 |
+| Activation API — the `commandsManager` path the assignment names vs. `toolbarService.recordInteraction`, which also refreshes the toolbar highlight. | PR 4 |
+| How an activation failure is reported to the host (retry, a new message type, or leave the row `waiting`). | PR 4 |
+| Readiness fallback when the study or hanging protocol fails and the OHIF readiness event never fires. | PR 3 |
+| Contract test location — `packages/*` sits outside the root Jest project globs. | PR 6 |
 
 Accepted scope limits: one host page with one viewer iframe (multiple iframes would need a channel ID in the envelope); no acknowledgements, retries or idempotency keys; no state persistence across reload unless star task 5.6 is done; `MEASUREMENT_UPDATED` is delivered unthrottled on the assumption that a tiny form can absorb drag-rate updates — to be revisited if measured otherwise.
 

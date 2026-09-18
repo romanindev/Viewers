@@ -198,7 +198,7 @@ Event names — `MeasurementService.ts:71-83`: `MEASUREMENT_ADDED`, `MEASUREMENT
 
 `subscribe()` returns `{ unsubscribe }` — `platform/core/src/services/_shared/pubSubServiceInterface.ts:35-37`.
 
-### 5.3 ⚠ `cachedStats` timing — [OPEN], blocks PR 4
+### 5.3 ⚠ `cachedStats` timing — [OPEN], blocks PR 5
 
 `cachedStats` is **not** computed on mouse-up. It is computed inside the Cornerstone render pass, and updates are throttled:
 
@@ -327,12 +327,12 @@ None of these may be silently resolved. Resolving one means: gather the stated e
 
 | # | Question | Target PR | Evidence needed to close |
 |---|---|---|---|
-| 1 | **`cachedStats` timing** — is `area` finite and final at `MEASUREMENT_ADDED`? How often is it `null` or stale? | **PR 4** | Logged `MEASUREMENT_ADDED` + following `MEASUREMENT_UPDATED` for a slow draw and a fast click-drag-release (§5.3) |
-| 2 | **Activation API** — `commandsManager.runCommand('setToolActiveToolbar', …)` (the assignment names `setToolActive`, p.6 §11) or `toolbarService.recordInteraction` (keeps the toolbar highlight in sync)? | **PR 3** | A decision, not a source question. Whichever is chosen, the read-back verification of §3.2 applies. Current lean: the `commandsManager` path, because it is the API the assignment names and `setToolActiveToolbar` already refreshes toolbar state. |
-| 3 | **Activation-failure reporting** — how does a failed activation reach the host? Retry after the next `VIEWPORTS_READY`, a new `ACTIVATION_FAILED` message, or leave the row `waiting`? | **PR 3** | A protocol decision. Adding a message type is a deliberate contract change and must be recorded in the message table. |
-| 4 | **Readiness fallback** — `VIEWPORTS_READY` never fires if the study or hanging protocol fails, so `VIEWER_READY` would never be sent. Timeout, secondary signal, or explicit error message? | **PR 2** | Observe a deliberately broken `StudyInstanceUIDs` in the iframe |
-| 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | **PR 5** (first test PR) | Decide when the first test is written (§9.2) |
-| 6 | **`esbuild` build scripts** — does the Vite host app need `esbuild: true` in `pnpm-workspace.yaml` `allowBuilds`? | **PR 1** | The first `pnpm run install:update-lockfile` plus a host dev-server start. Do not pre-emptively edit the allowlist; if needed, add it with a comment explaining why. |
+| 1 | **`cachedStats` timing** — is `area` finite and final at `MEASUREMENT_ADDED`? How often is it `null` or stale? | **PR 5** | Logged `MEASUREMENT_ADDED` + following `MEASUREMENT_UPDATED` for a slow draw and a fast click-drag-release (§5.3) |
+| 2 | **Activation API** — `commandsManager.runCommand('setToolActiveToolbar', …)` (the assignment names `setToolActive`, p.6 §11) or `toolbarService.recordInteraction` (keeps the toolbar highlight in sync)? | **PR 4** | A decision, not a source question. Whichever is chosen, the read-back verification of §3.2 applies. Current lean: the `commandsManager` path, because it is the API the assignment names and `setToolActiveToolbar` already refreshes toolbar state. |
+| 3 | **Activation-failure reporting** — how does a failed activation reach the host? Retry after the next `VIEWPORTS_READY`, a new `ACTIVATION_FAILED` message, or leave the row `waiting`? | **PR 4** | A protocol decision. Adding a message type is a deliberate contract change and must be recorded in the message table. |
+| 4 | **Readiness fallback** — `VIEWPORTS_READY` never fires if the study or hanging protocol fails, so `VIEWER_READY` would never be sent. Timeout, secondary signal, or explicit error message? | **PR 3** | Observe a deliberately broken `StudyInstanceUIDs` in the iframe |
+| 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | **PR 6** (first test PR) | Decide when the first test is written (§9.2) |
+| 6 | **`esbuild` build scripts** — does the Vite host app need `esbuild: true` in `pnpm-workspace.yaml` `allowBuilds`? | **PR 2** | The first `pnpm run install:update-lockfile` plus a host dev-server start. Do not pre-emptively edit the allowlist; if needed, add it with a comment explaining why. |
 
 Closed during documentation finalization:
 
