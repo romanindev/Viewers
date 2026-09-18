@@ -180,7 +180,7 @@ The setup guide's status table says so explicitly; nothing claims to work yet.
 - pnpm run build succeeds; git diff --stat shows no OHIF source changes
 ```
 
-## PR 3 — `feat: add OHIF bridge extension and readiness handshake` — 🔜 NEXT (not started)
+## PR 3 — `feat: add OHIF bridge extension and readiness handshake` — 🚧 IN PROGRESS (implemented, browser-verified; uncommitted/unmerged on `feat/ohif-bridge-extension`)
 
 ### Goal
 
@@ -207,17 +207,23 @@ Create the viewer-side bridge and a trustworthy `VIEWER_READY`.
 - subscribe to `VIEWPORTS_READY`; emit `VIEWER_READY` **once** (idempotent) and only when activation is achievable;
 - cleanup bridge listeners/subscriptions; guard installation so hot reload cannot duplicate them.
 
-### Must resolve in this PR
+### Must resolve in this PR — resolved
 
-**[OPEN]** `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 4 — readiness fallback. `VIEWPORTS_READY` never fires if the study or hanging protocol fails, so `VIEWER_READY` would never be sent. Reproduce with a deliberately broken `StudyInstanceUIDs`, choose a fallback (timeout / secondary signal / explicit error message), and record the decision with evidence.
+`docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 4 — readiness fallback. Reproduced with a deliberately invalid `StudyInstanceUIDs`: `VIEWPORTS_READY` never fires, so no `VIEWER_READY` is ever sent and the host correctly stays "not ready" indefinitely; OHIF displays its own error UI inside the iframe. **Accepted decision:** no diagnostic timeout, no new failure message type, no contract change for PR 3's MVP scope — recorded with evidence in `ARCHITECTURE.md` §10.10.
 
-### Verification
+### Verification — browser-verified
 
-- host receives exactly one valid `VIEWER_READY`;
-- reload and a layout change do not produce a duplicate `VIEWER_READY` or duplicate listeners;
-- fake wrong-origin / wrong-version / unrelated messages are ignored on both sides;
-- viewer still loads a normal study with the extension registered;
-- broken-study case behaves per the chosen fallback.
+- host receives exactly one valid `VIEWER_READY` on a normal CT load — ✅ confirmed;
+- a page reload re-establishes readiness with a fresh `viewerInstanceId` — ✅ confirmed;
+- a layout change does not produce a duplicate `VIEWER_READY` — ✅ confirmed (underlying `VIEWPORTS_READY` re-fires, `readyEmitted` guard prevents a duplicate send);
+- an HMR edit-and-save smoke test showed the handshake still working with no duplicate READY after a subsequent layout change — ✅ confirmed;
+- fake wrong-origin / wrong-version / unrelated messages are ignored on both sides — implemented, not separately re-verified in this browser session (unchanged since PR 2's host-side verification and this PR's viewer-side implementation);
+- viewer still loads a normal study with the extension registered — ✅ confirmed (CT visibly renders);
+- broken-study case: no `VIEWER_READY`, host stays not ready, OHIF shows its own error — ✅ confirmed, and accepted as the MVP behavior (no host-side fallback added, see above).
+
+An additional iframe-lifecycle fix was required during this verification: readiness is now reset at the point the host itself (re)assigns the iframe `src` (`apps/host-app/src/bridge/useViewerBridge.ts`, `resetForNavigation`), not on the iframe's `onLoad` event — `onLoad` fires well before OHIF's own boot completes and risked clearing an already-valid handshake. A reload/navigation *not* initiated by the host cannot be reliably detected with the current architecture; documented as an open, accepted limitation in `ARCHITECTURE.md` §6 and §11 rather than solved with polling, a state machine, or a new message type.
+
+**Not yet committed or merged** — this work is on branch `feat/ohif-bridge-extension`, uncommitted.
 
 ## PR 4 — `feat: activate and cancel ellipse from scoring form`
 
