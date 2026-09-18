@@ -190,7 +190,7 @@ So the area is at `Object.values(measurement.data)[0]?.area`, and the unit at `.
 
 **[VERIFIED]** `MEASUREMENT_ADDED` fires on drawing **completion**, not on first appearance. `platform/core/src/services/MeasurementService/MeasurementService.ts:541-575` only broadcasts when a previous entry already exists; the `ANNOTATION_ADDED` pass stores silently and the `ANNOTATION_COMPLETED` pass emits (`extensions/cornerstone/src/initMeasurementService.ts:340-341`). Payload is `{ source, measurement }`.
 
-**[UNVERIFIED] — open question, must be settled with a real logged event before PR 4.** `cachedStats` is computed inside the Cornerstone render pass, not on mouse-up, and updates are throttled (100 ms, trailing):
+**[UNVERIFIED] — open question, must be settled with a real logged event before PR 5.** `cachedStats` is computed inside the Cornerstone render pass, not on mouse-up, and updates are throttled (100 ms, trailing):
 
 - `node_modules/@cornerstonejs/tools/dist/esm/tools/annotation/EllipticalROITool.js:408-421` — stats computed in `renderAnnotation`;
 - `:606` — `_throttledCalculateCachedStats`, 100 ms trailing;
@@ -532,3 +532,18 @@ For each requested PR:
    - suggested PR title/body.
 
 Do not hide uncertainty. If actual OHIF behavior contradicts these notes, stop, show the evidence from the checked-out source, and propose the smallest adjustment.
+
+## Permanent workflow rules
+
+These apply to every task on this repository, not just the current PR. They do not expire when a PR merges.
+
+1. **Read before acting — the relevant sections, not everything.** Before starting any task, read the relevant sections of `TASK.md` (requirements), this file (workflow rules), and the current PR's section in `IMPLEMENTATION_PLAN.md` — not just once at the start of the project. This means targeted reading of what bears on the task at hand, not a full re-read of every document and not a full repository audit; the one-time baseline audit is already recorded in `docs/scoring-form/IMPLEMENTATION_NOTES.md` and does not need repeating.
+2. **`ASSIGNMENT.pdf` is the primary requirements source.** `TASK.md`, this file, `ARCHITECTURE.md` and `IMPLEMENTATION_PLAN.md` are derived; if one disagrees with the PDF, the PDF wins (see "Source of truth" above).
+3. **Stay inside the approved scope of the current PR.** Do not implement a later PR's functionality, even partially, without explicit approval — see "Work on one planned PR at a time" above.
+4. **Never silently change requirements or architecture decisions.** A changed decision is a documented decision: update `ARCHITECTURE.md` §10 (Accepted Decisions) or flag it as **[OPEN]** in the same PR — never just change behavior and move on.
+5. **Distinguish verified facts, assumptions and proposals.** Use the evidence labels (**[PDF]**, **[VERIFIED]**, **[OURS]**/**[PROPOSED]**, **[OPEN]**/**[UNVERIFIED]**) on every new factual claim about OHIF internals or design intent.
+6. **Update implementation status only after verification.** A status table row, checklist item, or "✅ done" marker must reflect something actually run/checked in this session, not something merely written or planned.
+7. **Keep architecture and implementation documentation synchronized with actual changes.** If code changes a documented contract, message type, or decision, update `ARCHITECTURE.md` and `IMPLEMENTATION_PLAN.md` in the same PR — not as a follow-up.
+8. **Record newly discovered risks and unresolved decisions.** New **[OPEN]** items go in `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 with a target PR; known inconsistencies get flagged where found, not silently resolved by guessing which side is right.
+9. **Before committing, inspect `git status`, `git diff`, and relevant test/typecheck results.** Never propose or describe a commit without having actually looked at what it contains.
+10. **Never proceed to the next PR without explicit approval.** Finishing one PR's scope is a stopping point, not a license to continue into the next one.

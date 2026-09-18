@@ -1,0 +1,14 @@
+{
+  "name": "@ohif/extension-scoring-form-bridge",
+  "version": "3.14.0-beta.29",
+  "description": "Viewer-side bridge extension: readiness handshake with the scoring-form host app",
+  "author": "OHIF",
+  "license": "MIT",
+  "module": "src/index.tsx",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@scoring-form/message-contract": "workspace:*"
+  }
+}

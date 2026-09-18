@@ -2,7 +2,7 @@
 
 Bridge between an OHIF Viewer fork in an iframe and a React scoring form on a different origin, communicating over `window.postMessage`.
 
-> **Status.** Design document. At the current commit the repository contains documentation only — no host app, bridge extension, or contract package exists yet. Behaviour described in the present tense is the **agreed design**, not shipped code; see `docs/scoring-form/README.md` for what actually runs today.
+> **Status.** Design document, partially implemented. As of GitHub PR #2 (`b2c5f4a4d`), the host app (`apps/host-app`) and the shared message contract (`packages/message-contract`) exist and are verified working. **PR #3 (`extensions/scoring-form-bridge`, the `VIEWER_READY` handshake) is implemented and browser-verified on branch `feat/ohif-bridge-extension`, but is uncommitted/unmerged** — see `docs/scoring-form/README.md` for the exact observed results. Everything else described in §5–§9 below (tool activation, measurement correlation, totals) is still the **agreed design**, not shipped code, until PR #4 onward lands it.
 >
 > **Scope.** Deliberately short, as the assignment asks (`ASSIGNMENT.pdf` p.4 §7.2 — *"1–2 pages is enough, but substantive"*). Supporting evidence, `file:line` citations and open technical questions live in **`docs/scoring-form/IMPLEMENTATION_NOTES.md`**.
 >
@@ -144,6 +144,12 @@ Small explicit guards in the shared package, no schema library — the protocol 
 
 **Early commands.** The host installs its `message` listener **before** the iframe `src` is assigned, so an early `VIEWER_READY` cannot be missed; commands issued before readiness go to an in-memory FIFO and flush in order on `VIEWER_READY` **[PDF** p.3 §5.1 — the command must not be lost**]**.
 
+**Handshake — browser-verified (PR 3).** On branch `feat/ohif-bridge-extension`: a normal CT load sends exactly one `VIEWER_READY`, received once by the host; a page reload re-establishes readiness with a fresh `viewerInstanceId`; a layout change re-fires the underlying `VIEWPORTS_READY` event but does **not** produce a duplicate `VIEWER_READY` (`readyEmitted` guard); an HMR edit-and-save smoke test showed no duplicate READY after a subsequent layout change. See `docs/scoring-form/README.md` for the full observed-results list.
+
+**Readiness reset is navigation-initiated, not `onLoad`-initiated.** The host resets its readiness state at the point it itself (re)assigns the iframe `src` (`apps/host-app/src/App.tsx`, via `useViewerBridge`'s `resetForNavigation`), not on the iframe's `load` event. `load` fires once the document finishes loading, which happens well before OHIF's own extension registration and viewport init complete and a real `VIEWER_READY` arrives — resetting on `load` risked clearing an already-valid handshake if a reload's `load` event landed after a fresh `VIEWER_READY` had already been processed. **[OPEN, accepted limitation]** a reload/navigation *not* initiated by the host (a manual iframe reload, or the OHIF app performing its own full-page navigation) cannot be reliably detected by the parent — there is no cross-origin "navigation started" signal available, and `onLoad` cannot substitute for one given the timing problem above. If this happens, the host shows stale readiness until the new page's handshake completes; a later `VIEWER_READY` (with a different `viewerInstanceId`) still correctly overwrites the stale state once it arrives (§10.2). Not solved by polling, a state machine, or a new message type in PR 3 — deliberately deferred.
+
+**Invalid study — accepted MVP fallback (PR 3).** Browser-verified: an invalid `StudyInstanceUID` never produces `VIEWPORTS_READY`, so no `VIEWER_READY` is ever sent and the host correctly remains "not ready" indefinitely. OHIF surfaces its own error UI inside the iframe for this case. **Accepted for PR 3:** no diagnostic timeout, no new failure message type, no contract change — the host simply has no way to distinguish "still loading" from "failed to load," and that gap is left open rather than papered over with a guess. See `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 4, still open.
+
 **Exclusive activation.** Only one row may be armed. Activating row B while row A is armed cancels A first, so two rows can never both show `drawing`.
 
 **Readiness means usable, not loaded.** **[VERIFIED]** `setToolActive` has three silent early returns (no viewports / no tool group / tool absent) and `runCommand` returns `undefined` either way — a completed activation call proves nothing. The bridge therefore **reads back** the tool group's active primary tool after activating and treats a mismatch as failure rather than arming the row. Details and citations: `docs/scoring-form/IMPLEMENTATION_NOTES.md` §3.
@@ -153,6 +159,8 @@ Small explicit guards in the shared package, no schema library — the protocol 
 **[VERIFIED]** `WindowLevel` — not `Pan` — is the baseline's default primary-mouse tool; `Pan` is bound to the auxiliary (middle) button (`modes/basic/src/initToolGroups.ts:20-37`).
 
 **[PDF** p.3 §4.3 step 6**]** requires *«інструмент у переглядачі вимикається сам (повертається Pan/дефолт)»* — "the tool switches itself off (returns to Pan/default)". The binding obligation is the automatic switch-off; "Pan/default" is a parenthetical offering two options, and its slash shows the author treats them as the same thing. Restoring `WindowLevel` **satisfies that requirement through the «дефолт» (default) option** — it is not a deviation. The target tool is a single named constant in the bridge, so it can be changed live in seconds. Rejected alternatives, including the capture-and-restore design this replaces: `docs/scoring-form/IMPLEMENTATION_NOTES.md` §4.
+
+> **[OPEN] Documentation inconsistency, not yet resolved.** `IMPLEMENTATION_PLAN.md` PR 4 ("activate and cancel ellipse from scoring form") still describes the deactivation path as "restore what was captured" / "captured tool restored" — the capture-and-restore design that this Accepted Decision explicitly rejects in favor of always activating the fixed `WindowLevel` constant. This is flagged here rather than silently fixed; PR 4 needs an explicit pass to align its wording (and any code written against it) with this section before that PR is implemented.
 
 ## 7. Units and totals
 
@@ -233,11 +241,15 @@ The host app lives in the OHIF fork under `apps/host-app`, with the contract in 
 
 React `useReducer`, not Redux or Zustand. One page, small state, explicit event-driven transitions, and stale-event handling that is easy to read and to explain live. Rows move `waiting → drawing → ready`; actions are explicit (`ADD_ROW`, `ACTIVATE_REQUESTED`, `ACTIVATION_QUEUED`, `ACTIVATION_CANCELLED`, `MEASUREMENT_RECEIVED`, …) rather than scattered booleans.
 
-### 10.9a `esbuild` build script and the `vite>rollup` override — closed in PR 1
+### 10.9a `esbuild` build script and the `vite>rollup` override — closed in PR 2
 
 `allowBuilds: { esbuild: true }` was required: without it `pnpm install --no-frozen-lockfile` fails with `ERR_PNPM_IGNORED_BUILDS`, because Vite depends on esbuild's postinstall to fetch its platform binary.
 
 A second, unanticipated issue surfaced only once the host app's dev server was actually started: the workspace's blanket `rollup: 2.80.0` override (synced from upstream OHIF, `pnpm-workspace.yaml`) is older than what Vite 5's bundled Rollup requires — it lacks the `./parseAst` subpath export, so `vite` crashed on boot with `ERR_PACKAGE_PATH_NOT_EXPORTED`. **Rationale for the fix:** rather than bump the shared `rollup` override (which upstream OHIF's own tooling may depend on staying at `2.80.0`), a more specific selector override, `'vite>rollup': 4.24.0`, was added alongside it — pnpm applies the most specific matching override, so this only changes the Rollup that Vite itself resolves, leaving every other consumer of the shared pin untouched. Verified: host dev server boots and serves `200` on `:5173`; `pnpm run build` (the viewer) still succeeds unaffected.
+
+### 10.10 Readiness fallback for an unavailable study — accepted MVP scope, PR 3
+
+Closes `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 4 for the mandatory MVP scope, browser-verified: with an invalid `StudyInstanceUID`, OHIF's hanging protocol never matches any display sets, `VIEWPORTS_READY` never fires (§6), so the bridge never sends `VIEWER_READY` and the host correctly stays "not ready" indefinitely. OHIF renders its own error state inside the iframe, visible to the user directly. **Accepted:** no diagnostic timeout, no new failure/error message type, no contract change. **Rationale:** the assignment's mandatory scope does not require the host to distinguish "still loading" from "failed" — OHIF's own error UI already communicates the failure to whoever is looking at the iframe, and inventing a host-side timeout would guess at a threshold with no evidence for what's correct, or a new message type would be a real contract change made without the assignment requiring it. **Trade-off, left open:** if the host UI genuinely needs to detect and surface this itself (not just rely on the visible OHIF error), a future PR would need either a bounded host-side timeout or a viewer-emitted failure message — deliberately not built now.
 
 ### 10.9 Why `postMessage`
 
@@ -249,11 +261,12 @@ Recorded honestly rather than hidden. Each is tracked with its target PR in `doc
 
 | **[OPEN]** item | Target PR |
 |---|---|
-| `cachedStats` timing — whether the area is final at `MEASUREMENT_ADDED`, or `null`/stale for a fast draw. Needs a logged real event before a mitigation is chosen. | PR 4 |
-| Activation API — the `commandsManager` path the assignment names vs. `toolbarService.recordInteraction`, which also refreshes the toolbar highlight. | PR 3 |
-| How an activation failure is reported to the host (retry, a new message type, or leave the row `waiting`). | PR 3 |
-| Readiness fallback when the study or hanging protocol fails and the OHIF readiness event never fires. | PR 2 |
-| Contract test location — `packages/*` sits outside the root Jest project globs. | PR 5 |
+| `cachedStats` timing — whether the area is final at `MEASUREMENT_ADDED`, or `null`/stale for a fast draw. Needs a logged real event before a mitigation is chosen. | PR 5 |
+| Activation API — the `commandsManager` path the assignment names vs. `toolbarService.recordInteraction`, which also refreshes the toolbar highlight. | PR 4 |
+| How an activation failure is reported to the host (retry, a new message type, or leave the row `waiting`). | PR 4 |
+| ~~Readiness fallback when the study or hanging protocol fails~~ — accepted for MVP as "no fallback, rely on OHIF's own error UI" (§10.10). Left open only if the host later needs to detect this itself. | PR 3 (closed for MVP) |
+| Contract test location — `packages/*` sits outside the root Jest project globs. | PR 6 |
+| A reload/navigation of the iframe not initiated by the host (manual reload, or an internal OHIF full-page navigation) cannot be reliably detected by the parent — no cross-origin "navigation started" signal exists, and `onLoad` cannot substitute (§6). Self-heals once a new `VIEWER_READY` arrives; no polling/state machine/new message type added. | Not scheduled — documented limitation |
 
 Accepted scope limits: one host page with one viewer iframe (multiple iframes would need a channel ID in the envelope); no acknowledgements, retries or idempotency keys; no state persistence across reload unless star task 5.6 is done; `MEASUREMENT_UPDATED` is delivered unthrottled on the assumption that a tiny form can absorb drag-rate updates — to be revisited if measured otherwise.
 

@@ -28,7 +28,7 @@ Anything written to `CLAUDE.md` is therefore destroyed by the next install and n
 | `IMPLEMENTATION_PLAN.md` | PR-by-PR plan and acceptance criteria |
 | `PR_TEMPLATE.md` | PR body template |
 | `AI-USAGE.md` | Truthful record of AI assistance |
-| `README.md` (root) | **Upstream OHIF**, untouched for now. Needs a pointer to `docs/scoring-form/README.md` before submission (PR 6) |
+| `README.md` (root) | **Upstream OHIF**, untouched for now. Needs a pointer to `docs/scoring-form/README.md` before submission (PR 7) |
 | `AGENTS.md` / `CLAUDE.md` | **Upstream OHIF**, do not modify |
 
 ## Where effort belongs (`ASSIGNMENT.pdf` p.6 §10)
@@ -63,9 +63,9 @@ The audit findings are recorded in `docs/scoring-form/IMPLEMENTATION_NOTES.md`, 
 
 ## Next step
 
-Start **PR 1** exactly as scoped in `IMPLEMENTATION_PLAN.md`.
+**PR 1** (`docs: establish assignment requirements and implementation plan`) and **PR 2** (`feat: bootstrap host app and shared message contract`) are merged. The host app, the shared message contract, and the workspace wiring exist and are verified working — see `docs/scoring-form/README.md` for what actually runs today.
 
-PR 1 is host-app + shared contract + workspace configuration only. It deliberately contains **no** OHIF extension and **no** working handshake.
+**PR 3** (`feat: add OHIF bridge extension and readiness handshake`) is next, exactly as scoped in `IMPLEMENTATION_PLAN.md`. It adds the viewer-side bridge extension and a trustworthy `VIEWER_READY`. It has **not** started — no `extensions/scoring-form-bridge`, no `pluginConfig.json` change, no working handshake exist yet.
 
 ## Working rules
 

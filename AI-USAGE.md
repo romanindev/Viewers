@@ -40,6 +40,10 @@ Suggested log:
 | PR 3 | TBD | TBD | TBD | TBD |
 | PR 4 | TBD | TBD | TBD | TBD |
 | PR 5 | TBD | TBD | TBD | TBD |
+| PR 6 | TBD | TBD | TBD | TBD |
+| PR 7 | TBD | TBD | TBD | TBD |
+| PR 8 (optional) | TBD | TBD | TBD | TBD |
+| PR 9 (optional) | TBD | TBD | TBD | TBD |
 
 ## Verification policy
 
