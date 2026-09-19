@@ -156,7 +156,7 @@ Alternatives considered and rejected:
 
 Commands module `defaultContext` is `'CORNERSTONE'` (end of `extensions/cornerstone/src/commandsModule.ts`). Passing the context explicitly is deterministic; `getCommand` otherwise searches all created contexts (`platform/core/src/classes/CommandsManager.ts:131-144`).
 
-See §10 item 2 for the open choice between `setToolActiveToolbar` and `recordInteraction`.
+Closed: `setToolActiveToolbar` (§10, "Closed during documentation finalization"; `ARCHITECTURE.md` §10.11).
 
 ### 4.5 Cancel still completes the annotation — [VERIFIED]
 
@@ -328,11 +328,11 @@ None of these may be silently resolved. Resolving one means: gather the stated e
 | # | Question | Target PR | Evidence needed to close |
 |---|---|---|---|
 | 1 | **`cachedStats` timing** — is `area` finite and final at `MEASUREMENT_ADDED`? How often is it `null` or stale? | **PR 5** | Logged `MEASUREMENT_ADDED` + following `MEASUREMENT_UPDATED` for a slow draw and a fast click-drag-release (§5.3) |
-| 2 | **Activation API** — `commandsManager.runCommand('setToolActiveToolbar', …)` (the assignment names `setToolActive`, p.6 §11) or `toolbarService.recordInteraction` (keeps the toolbar highlight in sync)? | **PR 4** | A decision, not a source question. Whichever is chosen, the read-back verification of §3.2 applies. Current lean: the `commandsManager` path, because it is the API the assignment names and `setToolActiveToolbar` already refreshes toolbar state. |
-| 3 | **Activation-failure reporting** — how does a failed activation reach the host? Retry after the next `VIEWPORTS_READY`, a new `ACTIVATION_FAILED` message, or leave the row `waiting`? | **PR 4** | A protocol decision. Adding a message type is a deliberate contract change and must be recorded in the message table. |
 | 4 | **Readiness fallback** — `VIEWPORTS_READY` never fires if the study or hanging protocol fails, so `VIEWER_READY` would never be sent. Timeout, secondary signal, or explicit error message? | **PR 3** | Observe a deliberately broken `StudyInstanceUIDs` in the iframe |
 | 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | **PR 6** (first test PR) | Decide when the first test is written (§9.2) |
 | 6 | **`esbuild` build scripts** — does the Vite host app need `esbuild: true` in `pnpm-workspace.yaml` `allowBuilds`? | **PR 2** | The first `pnpm run install:update-lockfile` plus a host dev-server start. Do not pre-emptively edit the allowlist; if needed, add it with a comment explaining why. |
+
+Items 4 and 6 are listed here as originally scoped; `ARCHITECTURE.md` §10.10 and §10.9a already record MVP-accepted closures for them — this table has not been reconciled with those sections, and that reconciliation is out of scope for this pass.
 
 Closed during documentation finalization:
 
@@ -341,6 +341,10 @@ Closed during documentation finalization:
 | Which tool to restore after a measurement | Deactivate `EllipticalROI`, activate `WindowLevel` (§4.3). Replaces the earlier capture-and-restore design, which could leave another annotation tool armed. |
 | `ARCHITECTURE.md` length vs the assignment's "1–2 pages" | `ARCHITECTURE.md` kept concise and reviewer-oriented; supporting evidence moved to this file. |
 | Role wording | Aligned with `ASSIGNMENT.pdf` p.1: *Frontend Developer (React / TypeScript)*. |
+| **Activation API** (was item 2) | `commandsManager.runCommand('setToolActiveToolbar', { toolName }, 'CORNERSTONE')`, with mandatory read-back of `getActivePrimaryMouseButtonTool()`. Recorded in `ARCHITECTURE.md` §10.11. |
+| **Activation-failure reporting** (was item 3) | New `ACTIVATION_FAILED { rowId, activationId, reason }` message, viewer → host; stale `activationId` dropped by the host under the same rule as every other correlated message. Recorded in `ARCHITECTURE.md` §5, §10.11. |
+| **Pre-ready queue + cancellation** (new, PR 4) | Cancellation is a queue edit, not a second message, while `ACTIVATE_TOOL` is still queued: it is removed from the FIFO before flush and no `DEACTIVATE_TOOL` is sent. `DEACTIVATE_TOOL` is sent only once the corresponding `ACTIVATE_TOOL` has already been dispatched to the viewer. Recorded in `ARCHITECTURE.md` §5, §6, §10.3. |
+| **Fixed `WindowLevel` restore** (new, PR 4) | Confirmed no-capture design (§4.3 above) agreed for PR 4 implementation; `IMPLEMENTATION_PLAN.md` PR 4 wording aligned to match. Already recorded as an Accepted Decision in `ARCHITECTURE.md` §10.7 — no separate PR 4 decision needed. |
 
 ---
 
