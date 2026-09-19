@@ -180,7 +180,7 @@ The setup guide's status table says so explicitly; nothing claims to work yet.
 - pnpm run build succeeds; git diff --stat shows no OHIF source changes
 ```
 
-## PR 3 — `feat: add OHIF bridge extension and readiness handshake` — 🚧 IN PROGRESS (implemented, browser-verified; uncommitted/unmerged on `feat/ohif-bridge-extension`)
+## PR 3 — `feat: add OHIF bridge extension and readiness handshake` — ✅ MERGED (`e2df3ff0e`, GitHub PR #3)
 
 ### Goal
 
@@ -223,7 +223,7 @@ Create the viewer-side bridge and a trustworthy `VIEWER_READY`.
 
 An additional iframe-lifecycle fix was required during this verification: readiness is now reset at the point the host itself (re)assigns the iframe `src` (`apps/host-app/src/bridge/useViewerBridge.ts`, `resetForNavigation`), not on the iframe's `onLoad` event — `onLoad` fires well before OHIF's own boot completes and risked clearing an already-valid handshake. A reload/navigation *not* initiated by the host cannot be reliably detected with the current architecture; documented as an open, accepted limitation in `ARCHITECTURE.md` §6 and §11 rather than solved with polling, a state machine, or a new message type.
 
-**Not yet committed or merged** — this work is on branch `feat/ohif-bridge-extension`, uncommitted.
+**Merged** to `master` via GitHub PR #3 (`e2df3ff0e`).
 
 ## PR 4 — `feat: activate and cancel ellipse from scoring form`
 
@@ -238,37 +238,38 @@ Implement host -> viewer command path.
 - row ID generation;
 - Activate button;
 - per-activation `activationId`;
-- pre-ready command queue;
-- one active drawing intent at a time;
-- Cancel action sends `DEACTIVATE_TOOL`.
+- pre-ready FIFO command queue — flushed in order on `VIEWER_READY`; a queued activation that is canceled or superseded before flush is **removed from the queue** — no `DEACTIVATE_TOOL` is sent, since the viewer never received the matching `ACTIVATE_TOOL` (§6, §10.3);
+- exactly one active drawing intent at a time: activating row B while row A is pending cancels/removes A first, per the same still-queued-vs-already-dispatched rule;
+- Cancel action: if the row's `ACTIVATE_TOOL` is still queued, remove it from the queue (no message sent); if it was already dispatched to the viewer, send `DEACTIVATE_TOOL`;
+- handle `ACTIVATION_FAILED`: reject if `activationId` does not match the row's current activation (stale, per §10.1/§10.4 rejection rule), otherwise move the row back to `waiting` and surface `reason`.
 
 ### Viewer changes
 
-- handle `ACTIVATE_TOOL`;
-- store armed `{ rowId, activationId }`;
-- after the flow ends, **deactivate `EllipticalROI` and activate `WindowLevel`** — the verified baseline default primary tool, held in one named constant (`ARCHITECTURE.md` §6, §10.7);
-- activate `EllipticalROI` — **[PROPOSED]** via `toolbarService.recordInteraction('EllipticalROI', { refreshProps: { viewportId } })` (`platform/core/src/services/ToolBarService/ToolbarService.ts:226-289`) so the toolbar highlight stays in sync;
-- **verify the activation actually took effect** by reading back the tool group's active primary tool; treat a mismatch as failure and do **not** arm the row. **[VERIFIED]** `setToolActive` has three silent early returns and `runCommand` returns `undefined` regardless (`extensions/cornerstone/src/commandsModule.ts:1214-1228`, `platform/core/src/classes/CommandsManager.ts:153-178`);
-- handle `DEACTIVATE_TOOL`: clear matching armed state, cancel any in-progress drawing via `commandsManager.runCommand('cancelMeasurement', {}, 'CORNERSTONE')` (`extensions/cornerstone/src/commandsModule.ts:317-322`), then **deactivate `EllipticalROI` and activate `WindowLevel`** — never restore an arbitrary previously active annotation tool;
+- handle `ACTIVATE_TOOL`; activate `EllipticalROI` via `commandsManager.runCommand('setToolActiveToolbar', { toolName: 'EllipticalROI' }, 'CORNERSTONE')` (`extensions/cornerstone/src/commandsModule.ts:1198-1207`) — **decided**, see `ARCHITECTURE.md` §10.11;
+- **verify the activation actually took effect** by reading back `toolGroup.getActivePrimaryMouseButtonTool()` on the `'default'` tool group; **only after that read-back confirms `EllipticalROI` is active does the bridge store armed `{ rowId, activationId }`**; on any exception during activation *or* a read-back mismatch, do **not** arm the row — send `ACTIVATION_FAILED { rowId, activationId, reason }` to the host instead;
+- after the flow ends (measurement completes or `DEACTIVATE_TOOL`), **always deactivate `EllipticalROI` and activate the fixed `WindowLevel` constant** — never capture/restore a previously active tool (`ARCHITECTURE.md` §6, §10.7);
+- handle `DEACTIVATE_TOOL`: clear matching armed state, cancel any in-progress drawing via `commandsManager.runCommand('cancelMeasurement', {}, 'CORNERSTONE')` (`extensions/cornerstone/src/commandsModule.ts:317-322`), then restore `WindowLevel` as above;
 - tolerate the **[VERIFIED]** edge case that `EllipticalROITool.cancel()` still fires `ANNOTATION_COMPLETED` (`node_modules/@cornerstonejs/tools/dist/esm/tools/annotation/EllipticalROITool.js:332`).
 
-Note: `Pan` is **not** the baseline default primary tool — `WindowLevel` is (`modes/basic/src/initToolGroups.ts:20-37`). Do not hardcode either; restore what was captured.
+Note: `Pan` is **not** the baseline default primary tool — `WindowLevel` is (`modes/basic/src/initToolGroups.ts:20-37`). The restore target is always the fixed `WindowLevel` constant; there is no capture step.
 
-### Must resolve in this PR
+### Must resolve in this PR — resolved
 
-- **[OPEN]** `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 3 — how an activation failure is reported to the host. Adding a message type is a deliberate contract change: decide, record it in the `ARCHITECTURE.md` §5 message table, do not improvise.
-- **[OPEN]** `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 2 — which activation API to use: the `commandsManager` path the assignment names, or `toolbarService.recordInteraction`, which also refreshes the toolbar highlight.
+- **[CLOSED]** activation-failure reporting: new `ACTIVATION_FAILED` message, viewer → host, `{ rowId, activationId, reason }`, covering both a thrown/rejected activation call and a read-back mismatch. Recorded in `ARCHITECTURE.md` §5 message table and §10.11.
+- **[CLOSED]** activation API: `setToolActiveToolbar`, with a read-back verification step. Recorded in `ARCHITECTURE.md` §10.11.
 
 ### Verification
 
 Critical cases:
 
 1. viewer ready -> Activate -> `EllipticalROI` becomes active **and the read-back confirms it**;
-2. Activate -> Cancel -> bridge is not armed, in-progress drawing cancelled, captured tool restored;
-3. click Activate before iframe/viewer readiness -> command is delivered later, not lost;
-4. row A then row B activation produces one coherent active row;
-5. unknown / wrong-version messages are ignored;
-6. an activation attempted with no viewport/tool group is detected as a failure rather than silently arming the row.
+2. Activate (dispatched) -> Cancel -> `DEACTIVATE_TOOL` is sent, bridge is not armed, in-progress drawing cancelled, `WindowLevel` restored (never a captured tool);
+3. click Activate before iframe/viewer readiness -> command is queued, delivered later, not lost;
+4. click Activate then Cancel before iframe/viewer readiness -> the queued `ACTIVATE_TOOL` is removed before flush and no `DEACTIVATE_TOOL` is sent for that attempt (the viewer never saw the activation);
+5. row A then row B activation produces one coherent active row — A is canceled/removed, B is armed;
+6. unknown / wrong-version messages are ignored;
+7. an activation attempted with no viewport/tool group is detected as a failure — the row stays `waiting` and the host receives `ACTIVATION_FAILED`, not a silently armed row;
+8. a late/duplicate `ACTIVATION_FAILED` carrying a superseded `activationId` is dropped by the host.
 
 ## PR 5 — `feat: correlate OHIF measurements with form rows`
 
