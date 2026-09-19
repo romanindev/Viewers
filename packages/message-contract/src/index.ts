@@ -11,6 +11,7 @@ export const MESSAGE_TYPE = {
   DEACTIVATE_TOOL: 'DEACTIVATE_TOOL',
   MEASUREMENT_ADDED: 'MEASUREMENT_ADDED',
   MEASUREMENT_UPDATED: 'MEASUREMENT_UPDATED',
+  ACTIVATION_FAILED: 'ACTIVATION_FAILED',
 } as const;
 
 export type MessageType = (typeof MESSAGE_TYPE)[keyof typeof MESSAGE_TYPE];
@@ -60,6 +61,12 @@ export type MeasurementUpdatedPayload = {
   measurement: BridgeMeasurementValue;
 };
 
+export type ActivationFailedPayload = {
+  rowId: string;
+  activationId: string;
+  reason: string;
+};
+
 export type ViewerReadyMessage = BridgeEnvelope<'VIEWER_READY', ViewerReadyPayload>;
 export type ActivateToolMessage = BridgeEnvelope<'ACTIVATE_TOOL', ActivateToolPayload>;
 export type DeactivateToolMessage = BridgeEnvelope<'DEACTIVATE_TOOL', DeactivateToolPayload>;
@@ -68,13 +75,15 @@ export type MeasurementUpdatedMessage = BridgeEnvelope<
   'MEASUREMENT_UPDATED',
   MeasurementUpdatedPayload
 >;
+export type ActivationFailedMessage = BridgeEnvelope<'ACTIVATION_FAILED', ActivationFailedPayload>;
 
 export type BridgeMessage =
   | ViewerReadyMessage
   | ActivateToolMessage
   | DeactivateToolMessage
   | MeasurementAddedMessage
-  | MeasurementUpdatedMessage;
+  | MeasurementUpdatedMessage
+  | ActivationFailedMessage;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -141,6 +150,13 @@ export const isBridgeMessage = (value: unknown): value is BridgeMessage => {
         isNonEmptyString((payload as Record<string, unknown>).rowId) &&
         isNonEmptyString((payload as Record<string, unknown>).measurementId) &&
         isBridgeMeasurementValue((payload as Record<string, unknown>).measurement)
+      );
+
+    case MESSAGE_TYPE.ACTIVATION_FAILED:
+      return (
+        isNonEmptyString((payload as Record<string, unknown>).rowId) &&
+        isNonEmptyString((payload as Record<string, unknown>).activationId) &&
+        isNonEmptyString((payload as Record<string, unknown>).reason)
       );
 
     default:

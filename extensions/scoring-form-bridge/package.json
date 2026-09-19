@@ -5,6 +5,9 @@
   "author": "OHIF",
   "license": "MIT",
   "module": "src/index.tsx",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
   "engines": {
     "node": ">=24"
   },

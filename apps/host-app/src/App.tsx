@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { VIEWER_STUDY_URL } from './config';
 import { useViewerBridge } from './bridge/useViewerBridge';
+import { useScoringForm } from './form/useScoringForm';
 
 export function App() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -9,7 +10,9 @@ export function App() {
   // Installs the message listener. Declared before the effect below so it
   // runs first on mount — the listener must exist before the iframe `src`
   // is assigned, never the other way around.
-  const { ready, viewerInstanceId, resetForNavigation } = useViewerBridge(iframeRef);
+  const bridge = useViewerBridge(iframeRef);
+  const { ready, viewerInstanceId, resetForNavigation } = bridge;
+  const { rows, addRow, activate, cancel } = useScoringForm(bridge);
 
   useEffect(() => {
     if (iframeRef.current) {
@@ -46,7 +49,26 @@ export function App() {
         <p>
           Viewer: {ready ? `ready (${viewerInstanceId})` : 'not ready'}
         </p>
-        <p>Placeholder — rows, activation and totals arrive in later PRs.</p>
+        <button onClick={addRow}>Add Measurement</button>
+        <ul style={{ listStyle: 'none', padding: 0 }}>
+          {rows.map(row => (
+            <li
+              key={row.id}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.5rem 0' }}
+            >
+              <span style={{ flex: '1 1 auto' }}>
+                {row.status}
+                {row.failureReason ? ` — ${row.failureReason}` : ''}
+              </span>
+              {row.status === 'drawing' ? (
+                <button onClick={() => cancel(row.id)}>Cancel</button>
+              ) : (
+                <button onClick={() => activate(row.id)}>Activate</button>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p>Measurement extraction and totals arrive in later PRs.</p>
       </div>
     </div>
   );
