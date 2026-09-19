@@ -383,7 +383,7 @@ Manual demo script (completed and confirmed by the author during browser verific
 
 With the manual demo script above confirmed, the mandatory scope is submission-quality, pending only the PR 7 clean-machine verification gate.
 
-## PR 7 — `docs: finalize architecture, runbook, and AI usage`
+## PR 7 — `docs: finalize architecture, runbook, and AI usage` — ✅ MERGED (`825b7aec4`, GitHub PR #7)
 
 ### Goal
 
