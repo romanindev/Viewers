@@ -227,7 +227,7 @@ An additional iframe-lifecycle fix was required during this verification: readin
 
 ## PR 4 — `feat: activate and cancel ellipse from scoring form` — ✅ MERGED (`c740ce731`; docs `4c3d0858`, implementation `e169f8096`)
 
-Activation, cancellation, and the `VIEWER_READY` handshake are implemented and browser-verified per the critical cases below. Measurement correlation (PR 5) is now implemented and merged — see below. Totals (PR 6) are not implemented yet.
+Activation, cancellation, and the `VIEWER_READY` handshake are implemented and browser-verified per the critical cases below. Measurement correlation (PR 5) and totals (PR 6) are also now implemented and merged — see below.
 
 ### Goal
 
@@ -371,7 +371,7 @@ Complete the mandatory scenario.
 
 Automated (done): unit tests, scoped TypeScript check, and production build above.
 
-Manual demo script (partially verified; remaining scenarios pending before merge):
+Manual demo script (completed and confirmed by the author during browser verification; scenarios were also verified across earlier PRs):
 
 1. start both apps;
 2. add three rows;
@@ -381,7 +381,7 @@ Manual demo script (partially verified; remaining scenarios pending before merge
 6. show early activation while viewer loads;
 7. confirm no mixed-unit summation.
 
-Once the manual demo script above is run and confirmed, the mandatory scope should be submission-quality.
+With the manual demo script above confirmed, the mandatory scope is submission-quality, pending only the PR 7 clean-machine verification gate.
 
 ## PR 7 — `docs: finalize architecture, runbook, and AI usage`
 
@@ -422,10 +422,10 @@ Make the project reproducible on a clean machine and easy to defend.
 
 All four are hard gates. The assignment states the reviewer's steps will be executed **literally on a clean machine** (**[PDF** p.4 §7.2**]**), and "reproduces from the README without hints" is 25% of the grade (**[PDF** p.6 §10**]**).
 
-- [ ] **Discoverable link from the root `README.md`** to `docs/scoring-form/README.md`. The root README is upstream OHIF's and is untouched until this PR; this is the **only** intended edit to an upstream OHIF file in the whole task, and it must be called out in the PR body. A reviewer opening the root readme must find the task guide without being told it exists.
-- [ ] **Replace the placeholder clone command.** `docs/scoring-form/README.md` currently reads `git clone <this-fork>`. Substitute the **actual public fork URL**, and confirm the repository is publicly reachable (the assignment requires an open repository, **[PDF** p.4 §7.1**]**).
-- [ ] **Verified exact `StudyInstanceUID` and a working direct viewer URL.** Record the real UID — not a placeholder — and paste the full working URL in the form `http://localhost:3000/viewer?StudyInstanceUIDs=<uid>`. Confirm against the default public DICOMweb source that the study loads and that `EllipticalROI` yields an area in `mm²` on it.
-- [ ] **Clean-machine setup verification using only the documented commands.** Fresh clone or clean worktree, no undeclared global dependencies, no hidden local config, nothing carried over from the development checkout. Follow the guide verbatim, top to bottom, and fix the guide — not the machine — wherever it fails. Record in the PR body what was run and on what.
+- [x] **Discoverable link from the root `README.md`** to `docs/scoring-form/README.md`. Added: a short pointer near the top of the root README, the **only** intended edit to an upstream OHIF file in the whole task.
+- [x] **Replace the placeholder clone command.** `docs/scoring-form/README.md` now reads `git clone https://github.com/romanindev/Viewers.git` in place of the `<this-fork>` placeholder.
+- [x] **Verified exact `StudyInstanceUID` and a working direct viewer URL.** Recorded since PR 2 — `http://localhost:3000/viewer?StudyInstanceUIDs=1.3.6.1.4.1.25403.345050719074.3824.20170125095438.5`, confirmed against the default public DICOMweb source; loads an MR series with pixel spacing, so `EllipticalROI` yields an area in `mm²`.
+- [x] **Clean-clone setup verification completed.** Cloned the repository from GitHub, checked out the published PR #7 branch (`f052cee6`), and installed dependencies using `pnpm run install:update-lockfile` with Node.js 24.15.0 and pnpm 11.5.2. Launched OHIF on `localhost:3000` and host-app on `localhost:5173` using the documented commands. Confirmed that the study loads in the iframe, the viewer reports `Ready`, and `git status --short` remains empty after installation and startup. No application code or configuration changes were needed.
 
 ## PR 8 — optional `feat: sync live measurement updates`
 

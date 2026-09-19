@@ -1,3 +1,6 @@
+> **Reviewer setup guide:** for the Viewer + Scoring Form task, see
+> [`docs/scoring-form/README.md`](docs/scoring-form/README.md).
+
 <!-- prettier-ignore-start -->
 <div align="center">
   <h1>OHIF Medical Imaging Viewer</h1>
