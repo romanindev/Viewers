@@ -331,7 +331,7 @@ None of these may be silently resolved. Resolving one means: gather the stated e
 
 | # | Question | Target PR | Evidence needed to close |
 |---|---|---|---|
-| 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | **PR 6** (first test PR) | Decide when the first test is written (§9.2) — still genuinely open; `jest.config.js:10-14` still globs only `platform/*` and `extensions/*` as of `14f761f0d`. |
+| 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | Not scheduled | **[PR 6, implemented]** wrote the mandatory totals tests in `apps/host-app` using Node's built-in test runner (`node --test` + `ts-node/esm`), sidestepping Jest entirely for that package — this question, specifically about `packages/message-contract` under the root Jest config, was not addressed and remains genuinely open; `jest.config.js:10-14` still globs only `platform/*` and `extensions/*` as of `52770e002`. |
 
 Items 4 and 6, originally scoped here, are reconciled below — both are already closed with MVP-accepted decisions recorded in `ARCHITECTURE.md`, not left open.
 
