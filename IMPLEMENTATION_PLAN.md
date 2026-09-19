@@ -225,7 +225,9 @@ An additional iframe-lifecycle fix was required during this verification: readin
 
 **Merged** to `master` via GitHub PR #3 (`e2df3ff0e`).
 
-## PR 4 — `feat: activate and cancel ellipse from scoring form`
+## PR 4 — `feat: activate and cancel ellipse from scoring form` — ✅ MERGED (`c740ce731`; docs `4c3d0858`, implementation `e169f8096`)
+
+Activation, cancellation, and the `VIEWER_READY` handshake are implemented and browser-verified per the critical cases below. Measurement correlation (PR 5) and totals (PR 6) are not implemented yet.
 
 ### Goal
 
@@ -271,7 +273,7 @@ Critical cases:
 7. an activation attempted with no viewport/tool group is detected as a failure — the row stays `waiting` and the host receives `ACTIVATION_FAILED`, not a silently armed row;
 8. a late/duplicate `ACTIVATION_FAILED` carrying a superseded `activationId` is dropped by the host.
 
-## PR 5 — `feat: correlate OHIF measurements with form rows`
+## PR 5 — `feat: correlate OHIF measurements with form rows` — design finalized, not implemented
 
 ### Goal
 
@@ -284,53 +286,57 @@ Implement viewer -> host result path.
 - no top-level `area`; area is at `Object.values(measurement.data)[0]?.area`, unit at `.areaUnit`;
 - `measurement.data` **is** `annotation.data.cachedStats`, keyed by Cornerstone `targetId`;
 - `measurement.uid` equals the Cornerstone `annotationUID`;
-- `MEASUREMENT_ADDED` fires on drawing **completion**, payload `{ source, measurement }`, `source.name === CORNERSTONE_3D_TOOLS_SOURCE_NAME` for tool-drawn annotations (`platform/core/src/services/MeasurementService/MeasurementService.ts:541-575`, `extensions/cornerstone/src/initMeasurementService.ts:340-341`);
+- OHIF's internal `measurementService.EVENTS.MEASUREMENT_ADDED` fires on drawing **completion**, payload `{ source, measurement }`, `source.name === CORNERSTONE_3D_TOOLS_SOURCE_NAME` for tool-drawn annotations (`platform/core/src/services/MeasurementService/MeasurementService.ts:541-575`, `extensions/cornerstone/src/initMeasurementService.ts:340-341`);
 - `areaUnit` is an **open string set** (`'mm²'`, `'px²'`, plus calibration suffixes; `²` is U+00B2).
 
-### ⛔ Blocking open issue — resolve before writing the adapter
+Note the naming collision: OHIF's own `measurementService.EVENTS.MEASUREMENT_ADDED` (viewer-internal) is a different thing from the bridge protocol's `MEASUREMENT_ADDED` (viewer → host). The former is the drawing-completion **trigger**; the latter is now the **final result** message, sent only after the settling procedure below.
 
-**[OPEN]** `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 1 — `cachedStats` timing. Stats are computed in the Cornerstone render pass and throttled 100 ms trailing, while `ANNOTATION_COMPLETED` fires on mouse-up, so `area` may be `null` or stale at `MEASUREMENT_ADDED`, and `measurement.data` is a live reference that keeps mutating.
+### ⛔ Blocking open issue — resolved with runtime evidence
 
-Required first step of this PR:
+**[CLOSED]** `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 1 — `cachedStats` timing. Manually observed (evidence, not assumption): `MEASUREMENT_UPDATED` can arrive either before or after `MEASUREMENT_ADDED`; in one recorded draw, `MEASUREMENT_ADDED` reported `4214.7176 px²`, followed 51 ms later by `MEASUREMENT_UPDATED` reporting `26601.9840 px²`, matching OHIF's own displayed `26602 px²` — i.e. a **finite** area at `MEASUREMENT_ADDED` is not necessarily the **final** one. That draw's speed was not established in the supplied evidence — it is not characterized as fast or slow. Full evidence and citations: `docs/scoring-form/IMPLEMENTATION_NOTES.md` §5.3; decision and rationale: `ARCHITECTURE.md` §10.12.
 
-1. log a real `MEASUREMENT_ADDED` **and** the following `MEASUREMENT_UPDATED` for a **slow** draw;
-2. repeat for a **fast** click-drag-release;
-3. record both payloads and whether `area` was finite and final;
-4. only then choose a mitigation and record it, with the logged evidence, in `docs/scoring-form/IMPLEMENTATION_NOTES.md` §5.3 and as an entry in `ARCHITECTURE.md` §10 (Accepted Decisions).
+**Chosen mitigation — settle-and-replace, MVP heuristic, not a correctness guarantee:** correlate `rowId ↔ measurementId` and restore `WindowLevel` immediately at the drawing-completion trigger (OHIF's own `MEASUREMENT_ADDED`), independent of the area value. Debounce the *value* forwarding per `measurementId`: reset a 200 ms timer on every relevant OHIF `MEASUREMENT_ADDED`/`MEASUREMENT_UPDATED` for that `measurementId`, always keeping the latest event's value as the candidate; once 200 ms pass with no further relevant event, send the bridge's final `MEASUREMENT_ADDED` if the candidate has a finite area and a non-empty unit, otherwise send `MEASUREMENT_FAILED`. **200 ms is a heuristic chosen for this MVP, not a guarantee that no later update exists** — an `MEASUREMENT_UPDATED` arriving after the window closes is not forwarded (documented limitation, not solved in PR 5).
 
-Do not implement a mitigation before step 4, and do not present a guess as verified.
+### Protocol additions
+
+- `MEASUREMENT_COMPLETED { rowId, activationId, measurementId }`, viewer → host — sent once, immediately when OHIF's drawing-completion event fires for the armed `EllipticalROI` intent (before the debounce/settling above). Transitions the row `drawing → processing`.
+- `MEASUREMENT_ADDED { rowId, activationId, measurementId, toolName, measurement }` (existing type, redefined timing) — sent once the settle-and-replace procedure above concludes with a finite area and valid unit. Transitions `processing → ready`.
+- `MEASUREMENT_FAILED { rowId, activationId, reason }`, viewer → host — sent if the settle-and-replace procedure concludes with a non-finite area or missing/invalid unit. Returns the row `processing → waiting`, reason shown, retryable via Activate.
+- The three PR 5 messages (`MEASUREMENT_COMPLETED`, `MEASUREMENT_ADDED`, `MEASUREMENT_FAILED`) all carry `activationId`: the host validates `rowId` and `activationId` and drops the message if either does not match the row's current activation, per the existing stale-event rule (§10.1/§10.4). The existing optional `MEASUREMENT_UPDATED` (star task 5.1) is **not** part of this — its payload is `{ rowId, measurementId, measurement }` with no `activationId` (`ARCHITECTURE.md` §5 table); that contract is unchanged by this pass and out of scope here.
+- Row states: `waiting → drawing → processing → ready`, with `processing → waiting` on `MEASUREMENT_FAILED`. Full detail and rationale: `ARCHITECTURE.md` §10.12, message table §5.
 
 ### Viewer changes
 
-- subscribe to `measurementService.EVENTS.MEASUREMENT_ADDED`;
-- save the `{ unsubscribe }` handle;
-- filter by `toolName === 'EllipticalROI'` and by `source.name`;
-- ignore unrelated measurements if no matching armed activation exists;
-- adapt the OHIF measurement into the bridge value, copying **primitives only** — never forward the live `cachedStats` reference across `postMessage`;
-- apply the mitigation chosen above for non-finite / stale area;
-- send `rowId`, `activationId`, `measurementId`, value, unit;
-- store `measurementId -> rowId`;
-- clear armed state;
-- deactivate `EllipticalROI` and activate `WindowLevel` (`ARCHITECTURE.md` §6, §10.7) — satisfies the assignment's "Pan/default" via the *default* option.
+- subscribe to `measurementService.EVENTS.MEASUREMENT_ADDED` and `.MEASUREMENT_UPDATED`; save both `{ unsubscribe }` handles;
+- an armed intent is `{ rowId, activationId }` (§4) — it never contains a `measurementId`, since OHIF hasn't assigned an annotation UID until the annotation exists. So the *first* internal `MEASUREMENT_ADDED` cannot be matched by `measurementId`; it is matched by **being the next tool-drawn event while a row is armed and no `measurementId` has been captured for it yet**: filter by `toolName === 'EllipticalROI'` and `source.name === CORNERSTONE_3D_TOOLS_SOURCE_NAME`, and only proceed if a row is currently armed. On that event: capture `measurement.uid` as `measurementId`, establish `rowId ↔ measurementId` correlation, clear armed state, restore `WindowLevel`, and send `MEASUREMENT_COMPLETED` — all before evaluating the area value;
+- **this is an assumption, not a proof:** it relies on the existing single-active-drawing-tool/exclusive-activation design (§6) — it does not by itself rule out a concurrent, unrelated `EllipticalROI` being created by some other path at the same moment and being captured instead. No evidence was gathered on that race; it is not covered in PR 5's scope and must not be presented as closed;
+- once a `measurementId` is correlated, every subsequent `MEASUREMENT_UPDATED` is matched **only** against that captured `measurementId` (armed state is already cleared by then, so it cannot be used as the match key) — an `MEASUREMENT_UPDATED` whose `uid` doesn't match a known correlation is ignored, including one that arrives *before* the matching internal `MEASUREMENT_ADDED` (observed ordering): it cannot independently create a correlation, since no `measurementId` has been captured for it yet;
+- on the correlating `MEASUREMENT_ADDED` and every subsequent matched `MEASUREMENT_UPDATED`: snapshot `area`/`areaUnit` as primitives (never forward the live `cachedStats` reference) and (re)start a 200 ms debounce timer keyed by `measurementId`;
+- on debounce settle: if the latest snapshot has a finite area and a non-empty unit, adapt it into `BridgeMeasurementValue` and send the bridge's `MEASUREMENT_ADDED`; otherwise send `MEASUREMENT_FAILED { rowId, activationId, reason }`;
+- clear the debounce timer and drop the pending snapshot on disposal (`pagehide`/`beforeunload`/explicit `disposeScoringFormBridge`), alongside the existing subscription/listener cleanup;
+- a pending debounce/snapshot for one `measurementId` is independent of the single armed slot (§6 concurrency note, `ARCHITECTURE.md`): activating, drawing, or canceling a *different* row while an earlier row is `processing` must not touch the earlier row's pending state.
 
 ### Host changes
 
-- receive/validate `MEASUREMENT_ADDED`;
-- verify the row still exists;
-- verify current row `activationId` matches;
-- ignore stale event otherwise;
-- store measurement ID/value/unit;
-- mark row ready.
+- `MEASUREMENT_COMPLETED`: validate `rowId`/`activationId`; if current, move the row `drawing → processing`; store `measurementId` for later correlation checks;
+- `MEASUREMENT_ADDED`: validate `rowId`/`activationId` against the row's current activation; if current and the row is `processing`, store value/unit/`measurementId` and move the row `processing → ready`;
+- `MEASUREMENT_FAILED`: validate `rowId`/`activationId`; if current, move the row `processing → waiting` and surface `reason`; the row remains retryable via Activate;
+- no Cancel action is offered while a row is `processing` — the annotation already exists in OHIF at that point, and Cancel must never delete an already-completed annotation (only an in-progress manipulation, per PR 4's `DEACTIVATE_TOOL` scope);
+- a `processing` row is **not** an active drawing intent: it must not block activating a different row, and canceling that *different* row's own activation must not be confused with, or allowed to affect, the earlier row's still-pending `processing` result (`ARCHITECTURE.md` §6 concurrency note);
+- ignore stale, duplicate, or unrelated messages per the existing rules;
+- preserve the exact unit string; totals remain PR 6.
 
 ### Verification
 
 - create at least three sequential measurements;
 - each value lands in the correct row;
-- the reported area matches the value OHIF displays in the viewport (this is the check that catches the `cachedStats` staleness issue);
-- a fast click-drag-release also produces a correct value, or is handled per the chosen mitigation;
-- annotations created directly from the OHIF toolbar do not hijack a form row;
+- the reported final area matches the value OHIF displays in the viewport (this is the check that catches `cachedStats` staleness — confirmed necessary by the observed 4214.7176 → 26601.9840 px² case above);
+- a fast click-drag-release also produces a correct value, or resolves to `MEASUREMENT_FAILED` if the settle window truly never sees a finite value;
+- verify that annotations created directly from the OHIF toolbar do not hijack a form row; if this fails, investigate the correlation mechanism before merging PR 5 rather than treating the exclusive-activation assumption as a proven guarantee;
 - an Escape-cancelled partial ellipse does not corrupt a row;
-- stale activation event cannot overwrite a newer activation.
+- stale activation event cannot overwrite a newer activation;
+- Cancel is not offered/has no effect while a row is `processing`, and never deletes a completed annotation;
+- an `MEASUREMENT_UPDATED` arriving after the 200 ms settle window is observed to NOT be forwarded (documented limitation, not a bug).
 
 ## PR 6 — `feat: add unit-safe totals and final required UX`
 

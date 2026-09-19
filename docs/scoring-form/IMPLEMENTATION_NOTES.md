@@ -198,7 +198,7 @@ Event names — `MeasurementService.ts:71-83`: `MEASUREMENT_ADDED`, `MEASUREMENT
 
 `subscribe()` returns `{ unsubscribe }` — `platform/core/src/services/_shared/pubSubServiceInterface.ts:35-37`.
 
-### 5.3 ⚠ `cachedStats` timing — [OPEN], blocks PR 5
+### 5.3 ⚠ `cachedStats` timing — [CLOSED with runtime evidence], PR 5 design finalized (not yet implemented)
 
 `cachedStats` is **not** computed on mouse-up. It is computed inside the Cornerstone render pass, and updates are throttled:
 
@@ -206,26 +206,28 @@ Event names — `MeasurementService.ts:71-83`: `MEASUREMENT_ADDED`, `MEASUREMENT
 - **[VERIFIED]** `:606` — `_throttledCalculateCachedStats`, 100 ms, trailing;
 - **[VERIFIED]** `:186` — `triggerAnnotationCompleted` fires from `_endCallback` (mouse-up), immediately after the render trigger.
 
-Consequences — the first is structural and certain, the other two are plausible from the source but **unmeasured**:
+Consequences — the first is structural and certain; the other two are now **measured**, not just plausible:
 
-1. `measurement.data` is a **live reference** to `cachedStats` and keeps mutating after the event fires. *(certain)*
-2. A very fast click-drag-release may deliver `{ area: null, areaUnit: null }`. *(unmeasured)*
-3. Otherwise the area may be up to ~100 ms stale — not the final geometry. *(unmeasured)*
+1. `measurement.data` is a **live reference** to `cachedStats` and keeps mutating after the event fires. *(certain, source-level)*
+2. A finite area at `MEASUREMENT_ADDED` is not necessarily final. *(measured — see evidence below)*
+3. `MEASUREMENT_UPDATED` for the same annotation can arrive either before or after `MEASUREMENT_ADDED`. *(measured — see evidence below)*
 
-**Required procedure before choosing a mitigation:**
+**[MEASURED] Runtime evidence** (manual browser verification via temporary diagnostic instrumentation, since removed):
 
-1. log one real `MEASUREMENT_ADDED` plus the following `MEASUREMENT_UPDATED` for a **slow** draw;
-2. repeat for a **fast** click-drag-release;
-3. record both payloads and whether `area` was finite and final;
-4. only then select a mitigation and record it here with the evidence.
+- `MEASUREMENT_UPDATED` was observed both before and after `MEASUREMENT_ADDED` for the same annotation, across separate draws.
+- Slow and fast draws in most observed cases produced a finite area at `MEASUREMENT_ADDED` that already matched OHIF's final displayed value.
+- One later draw did not: `MEASUREMENT_ADDED` reported `4214.7176 px²`; the following `MEASUREMENT_UPDATED`, 51 ms later, reported `26601.9840 px²`; OHIF's own viewport display showed `26602 px²` (rounding accounts for the difference from `26601.9840`). The **updated**, later value was the correct one, not the first.
+- These are observed facts from a specific manual session, not a statistically characterized failure rate — the *existence* of the staleness case is now certain; how *often* it occurs across draw speeds/hardware remains unmeasured.
 
-Candidate mitigations — **none selected**:
+**Chosen mitigation — settle-and-replace, 200 ms debounce:** decouple tool/armed cleanup (immediate, at the OHIF drawing-completion event) from value forwarding (debounced). Every relevant `MEASUREMENT_ADDED`/`MEASUREMENT_UPDATED` for a `measurementId` resets a 200 ms timer and replaces a held primitive snapshot with the latest value; on settle, send the bridge's `MEASUREMENT_ADDED` if the snapshot is finite with a valid unit, otherwise `MEASUREMENT_FAILED`. Full rationale, rejected alternatives, and the explicit "not a guarantee" caveat: `ARCHITECTURE.md` §10.12.
 
-| Candidate | Trade-off |
-|---|---|
-| Adapter returns `null` on non-finite area; bridge defers the host message until the first `MEASUREMENT_UPDATED` for that `uid` | Correct value, but delays the host update and complicates armed-state teardown |
-| Re-read the same `cachedStats` reference on the next animation frame | Cheap, keeps a single message, but relies on frame timing |
-| Always wait for one `MEASUREMENT_UPDATED` before emitting | Simplest to reason about; fails if no update event ever arrives |
+Candidate mitigations considered (superseded by the decision above, kept for the record):
+
+| Candidate | Trade-off | Outcome |
+|---|---|---|
+| Adapter returns `null` on non-finite area; bridge defers the host message until the first `MEASUREMENT_UPDATED` for that `uid` | Correct value, but delays the host update and complicates armed-state teardown | Superseded — the chosen debounce generalizes this without hard-coupling to "exactly one update" |
+| Re-read the same `cachedStats` reference on the next animation frame | Cheap, keeps a single message, but relies on frame timing | Rejected — doesn't cover the observed 51 ms case, which can exceed one frame |
+| Always wait for one `MEASUREMENT_UPDATED` before emitting | Simplest to reason about; fails if no update event ever arrives | Rejected — the common slow-draw case observed here never produced a following update |
 
 ### 5.4 Adapter contract — [OURS]
 
@@ -235,9 +237,11 @@ function toBridgeArea(measurement): BridgeMeasurementValue | null
 
 - verify the tool/measurement is `EllipticalROI`;
 - extract a **finite** numeric area, return `null` otherwise;
-- extract the area unit as an exact string;
+- extract the area unit as an exact string, `null` if missing/empty;
 - copy primitives out — never forward the live `cachedStats` reference across `postMessage`;
 - return `null` for unsupported, malformed or not-yet-computed data.
+
+**[PR 5, not implemented]** this adapter is called on every relevant `MEASUREMENT_ADDED`/`MEASUREMENT_UPDATED` while the 200 ms settle-and-replace debounce (§10.12, `ARCHITECTURE.md` §10.12) is active for a `measurementId`; its `null`/non-`null` result is what the debounce's settle step uses to decide between the bridge's `MEASUREMENT_ADDED` and `MEASUREMENT_FAILED`.
 
 ---
 
@@ -327,7 +331,6 @@ None of these may be silently resolved. Resolving one means: gather the stated e
 
 | # | Question | Target PR | Evidence needed to close |
 |---|---|---|---|
-| 1 | **`cachedStats` timing** — is `area` finite and final at `MEASUREMENT_ADDED`? How often is it `null` or stale? | **PR 5** | Logged `MEASUREMENT_ADDED` + following `MEASUREMENT_UPDATED` for a slow draw and a fast click-drag-release (§5.3) |
 | 4 | **Readiness fallback** — `VIEWPORTS_READY` never fires if the study or hanging protocol fails, so `VIEWER_READY` would never be sent. Timeout, secondary signal, or explicit error message? | **PR 3** | Observe a deliberately broken `StudyInstanceUIDs` in the iframe |
 | 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | **PR 6** (first test PR) | Decide when the first test is written (§9.2) |
 | 6 | **`esbuild` build scripts** — does the Vite host app need `esbuild: true` in `pnpm-workspace.yaml` `allowBuilds`? | **PR 2** | The first `pnpm run install:update-lockfile` plus a host dev-server start. Do not pre-emptively edit the allowlist; if needed, add it with a comment explaining why. |
@@ -345,6 +348,8 @@ Closed during documentation finalization:
 | **Activation-failure reporting** (was item 3) | New `ACTIVATION_FAILED { rowId, activationId, reason }` message, viewer → host; stale `activationId` dropped by the host under the same rule as every other correlated message. Recorded in `ARCHITECTURE.md` §5, §10.11. |
 | **Pre-ready queue + cancellation** (new, PR 4) | Cancellation is a queue edit, not a second message, while `ACTIVATE_TOOL` is still queued: it is removed from the FIFO before flush and no `DEACTIVATE_TOOL` is sent. `DEACTIVATE_TOOL` is sent only once the corresponding `ACTIVATE_TOOL` has already been dispatched to the viewer. Recorded in `ARCHITECTURE.md` §5, §6, §10.3. |
 | **Fixed `WindowLevel` restore** (new, PR 4) | Confirmed no-capture design (§4.3 above) agreed for PR 4 implementation; `IMPLEMENTATION_PLAN.md` PR 4 wording aligned to match. Already recorded as an Accepted Decision in `ARCHITECTURE.md` §10.7 — no separate PR 4 decision needed. |
+| **`cachedStats` timing** (was item 1) | Closed with runtime evidence (§5.3): settle-and-replace 200 ms debounce, decoupled from immediate tool/armed cleanup at drawing completion. Explicitly not a finality guarantee. Recorded in `ARCHITECTURE.md` §10.12. Design only — PR 5 implementation pending. |
+| **New protocol messages for value finalization** (new, PR 5 design) | `MEASUREMENT_COMPLETED { rowId, activationId, measurementId }` (drawing-completion trigger, immediate) and `MEASUREMENT_FAILED { rowId, activationId, reason }` (settle timeout with no valid area/unit) added to the message table; row model extended `waiting → drawing → processing → ready`, with `processing → waiting` on failure. A `processing` row is not pending/armed and does not block activating a different row; its pending debounce/correlation is keyed per `measurementId`, independent of the single armed slot, and is unaffected by canceling a different, later activation. Recorded in `ARCHITECTURE.md` §5, §6, §10.8, §10.12. Design only — PR 5 implementation pending. |
 
 ---
 
