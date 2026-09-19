@@ -326,6 +326,12 @@ Note the naming collision: OHIF's own `measurementService.EVENTS.MEASUREMENT_ADD
 - ignore stale, duplicate, or unrelated messages per the existing rules;
 - preserve the exact unit string; totals remain PR 6.
 
+### Manual toolbar switching bug — browser-reproduced, fixed
+
+**[VERIFIED bug, fixed]** Reproduction: Activate a row → manually pick a different primary tool from OHIF's own toolbar → manually pick `EllipticalROI` again and draw. The original row incorrectly received the new annotation, because nothing invalidated its `armed` state when the user switched away — exactly the gap the toolbar-hijack verification bullet below was written to catch, one step further (armed, not un-armed).
+
+Fix: the bridge subscribes to `toolGroupService.EVENTS.PRIMARY_TOOL_ACTIVATED` (filtered to the `'default'` tool group). When it fires for a `toolName` other than `EllipticalROI` while a row is armed, the bridge clears `armed` immediately and sends a new message, `ACTIVATION_CANCELLED { rowId, activationId, reason }` — deliberately not `restoreDefaultTool()` (the user's chosen tool is left alone) and deliberately not touching `pendingResults` (unrelated, keyed independently). The host moves the matching `drawing` row to `waiting` with the reason shown, and sends nothing back to the viewer (no `DEACTIVATE_TOOL` echo). Full rationale, why this isn't `ACTIVATION_FAILED`, and why no "who triggered this" flag is needed: `ARCHITECTURE.md` §10.13.
+
 ### Verification
 
 - create at least three sequential measurements;
@@ -333,6 +339,7 @@ Note the naming collision: OHIF's own `measurementService.EVENTS.MEASUREMENT_ADD
 - the reported final area matches the value OHIF displays in the viewport (this is the check that catches `cachedStats` staleness — confirmed necessary by the observed 4214.7176 → 26601.9840 px² case above);
 - a fast click-drag-release also produces a correct value, or resolves to `MEASUREMENT_FAILED` if the settle window truly never sees a finite value;
 - verify that annotations created directly from the OHIF toolbar do not hijack a form row; if this fails, investigate the correlation mechanism before merging PR 5 rather than treating the exclusive-activation assumption as a proven guarantee;
+- Activate a row, manually switch to a different primary tool, manually switch back to `EllipticalROI` and draw — the original row must return to `waiting` with a reason (`ACTIVATION_CANCELLED`) and must **not** receive the later draw;
 - an Escape-cancelled partial ellipse does not corrupt a row;
 - stale activation event cannot overwrite a newer activation;
 - Cancel is not offered/has no effect while a row is `processing`, and never deletes a completed annotation;
