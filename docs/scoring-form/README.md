@@ -1,37 +1,33 @@
 # Viewer + Scoring Form — setup guide
 
-> ## ⚠ Status: PR 2 merged (`b2c5f4a4d`); PR 3 implemented and browser-verified, but **uncommitted** on `feat/ohif-bridge-extension`
+> ## Status: PR 2 – PR 6 merged into `master`; mandatory scope implemented
 >
-> **What already works:** the host app starts on `:5173`, renders the two-column layout, the OHIF viewer loads inside the iframe, and the `VIEWER_READY` handshake is working — browser-confirmed: a normal CT load sends exactly one `VIEWER_READY`; a page reload re-establishes readiness; a layout change does not duplicate it; an HMR edit-and-save smoke test showed no duplicate READY. **What does not exist yet:** tool activation, measurement handling, and totals — the host has no UI for any of that beyond a readiness indicator; that's PR 4 onward.
+> **What works:** the host app starts on `:5173`, renders the two-column layout with the OHIF viewer in an iframe and the scoring form on the right, and the `VIEWER_READY` handshake is browser-verified. Activating a row arms `EllipticalROI` in the viewer; drawing an ellipse correlates back to the correct row and reports its value and unit; the row can be cancelled while pending; and unit-safe totals (grouped by exact unit string, never mixed) are computed and displayed at the bottom of the form. See the status table below for exactly what is verified and what is an accepted, documented limitation.
 >
 > An invalid `StudyInstanceUID` never produces `VIEWER_READY` — the host stays "not ready" indefinitely and OHIF shows its own error inside the iframe. This is the **accepted MVP behavior**: no diagnostic timeout, no new failure message, no contract change (see `ARCHITECTURE.md` §10.10).
->
-> PR 3 is **not yet committed, pushed, or merged** — this status reflects the working tree on `feat/ohif-bridge-extension`, not `master`.
 
 ## Why this file is here
 
 The assignment (`ASSIGNMENT.pdf` p.4 §7.2) requires a `README.md` that takes a reviewer from `git clone` to a working screen, and states that those steps will be **executed literally on a clean machine**. That is 25% of the grade (p.6 §10, "Working scenario").
 
-The repository root `README.md` is the **upstream OHIF readme** and is deliberately left untouched for now, so that the fork stays close to upstream and the diff stays reviewable.
-
-> **Required before submission:** add a short, discoverable pointer from the root `README.md` to this file. A reviewer who clones the repository and opens the root readme must be able to find these instructions without being told they exist. Tracked as a deliverable in `IMPLEMENTATION_PLAN.md` PR 7.
+The repository root `README.md` is the **upstream OHIF readme**; PR 7 adds a short pointer near its top to this file, but otherwise leaves it untouched so the fork stays close to upstream and the diff stays reviewable.
 
 ## Status
 
 | Step | Works? | Delivered by |
 |---|---|---|
 | Prerequisites documented | ✅ yes | — |
-| Clone command shows the real public fork URL | ⬜ not yet — placeholder `<this-fork>` | PR 7 |
+| Clone command shows the real public fork URL | ✅ yes | PR 7 |
 | Install (`pnpm run install:update-lockfile`) | ✅ yes — verified on this checkout | PR 2 |
 | Viewer starts on `:3000` and opens a study | ✅ yes (unmodified upstream OHIF) | baseline |
 | Exact `StudyInstanceUID` recorded and verified | ✅ yes — see "Known-good study" below | PR 2 |
-| Clean-machine run of this guide, verbatim | ⬜ not yet | PR 7 |
+| Clean-machine run of this guide, verbatim | ⬜ **pending** — not yet re-verified from a clean clone since PR 7's edits | PR 7 |
 | Host app starts on `:5173` and shows the viewer in an iframe | ✅ yes | PR 2 |
-| Host `message` listener installed before iframe `src`, rejects wrong origin/version | ✅ yes (logs only, no handshake) | PR 2 |
-| Viewer announces `VIEWER_READY` | ✅ yes — browser-verified, **uncommitted** on `feat/ohif-bridge-extension` | PR 3 |
-| Activate a row → `EllipticalROI` becomes active | ⬜ not yet | PR 4 |
-| Drawn ellipse lands in the correct row with its unit | ⬜ not yet | PR 5 |
-| Unit-safe totals at the bottom of the form | ⬜ not yet | PR 6 |
+| Host `message` listener installed before iframe `src`, rejects wrong origin/version | ✅ yes | PR 2 |
+| Viewer announces `VIEWER_READY` | ✅ yes — browser-verified | PR 3 |
+| Activate a row → `EllipticalROI` becomes active, Cancel returns it to `waiting` | ✅ yes — browser-verified | PR 4 |
+| Drawn ellipse lands in the correct row with its value and unit | ✅ yes — browser-verified, with an accepted limitation on late `MEASUREMENT_UPDATED` (see Troubleshooting) | PR 5 |
+| Unit-safe totals at the bottom of the form (units never mixed) | ✅ yes — 10/10 unit tests passed for computeTotals; manual demo confirmed by the author (see IMPLEMENTATION_PLAN.md, PR 6). | PR 6 |
 
 ## Verified baseline
 
@@ -54,7 +50,7 @@ The repository root `README.md` is the **upstream OHIF readme** and is deliberat
 ## Install
 
 ```bash
-git clone <this-fork>          # TODO (PR 7): replace with the real public fork URL
+git clone https://github.com/romanindev/Viewers.git
 cd Viewers
 pnpm run install:update-lockfile
 ```
@@ -78,19 +74,26 @@ OHIF_OPEN=false pnpm run dev
 
 `OHIF_OPEN=false` suppresses the automatic browser tab, which is noise when the viewer is meant to be consumed inside the host's iframe. The port is `3000` by default and can be overridden with `OHIF_PORT`.
 
-### Terminal 2 — host app, port 5173 *(PR 2, done)*
+### Terminal 2 — host app, port 5173
 
 ```bash
 pnpm --filter host-app run dev
 ```
 
 Then open **`http://localhost:5173`**. The host renders a two-column layout —
-a full-height iframe with the OHIF viewer on the left, a scoring-panel
-placeholder on the right — and installs its `message` listener before the
-iframe `src` is assigned. Once the viewer's bridge extension sends
-`VIEWER_READY` (PR 3, uncommitted on `feat/ohif-bridge-extension`), the
-panel's "Viewer: ready (\<id\>)" line updates; there is still no row/activation
-UI beyond that indicator.
+a full-height iframe with the OHIF viewer on the left, the scoring form on
+the right — and installs its `message` listener before the iframe `src` is
+assigned. Once the viewer's bridge extension sends `VIEWER_READY`, the
+form becomes usable:
+
+1. Click **Add Measurement** to create a row, then click **Activate** on that row to arm `EllipticalROI` in the viewer.
+2. Draw an ellipse on the loaded image — the row moves through
+   `drawing → processing → ready` and shows the measured value with its
+   unit (e.g. `mm²`).
+3. Repeat for further rows. The **Total** panel at the bottom sums ready
+   rows grouped by their exact unit string — units are never mixed
+   together in one sum.
+4. To cancel an active or queued drawing intent, click **Cancel** while the row is in the `drawing` state. The row returns to `waiting` without affecting other rows or their totals.
 
 ## Known-good study
 
@@ -119,9 +122,10 @@ MR series with pixel spacing, so `EllipticalROI` yields an area in `mm²`.
 | `pnpm install` fails complaining about the lockfile | Used plain `pnpm install`; use `pnpm run install:update-lockfile` |
 | Install rejects a dependency as too new | `minimumReleaseAge: 2880` (48 h); pin an older exact version |
 | Host loads but the iframe is blank | Viewer not running on `:3000`, or the `StudyInstanceUIDs` value is wrong |
-| Host never leaves "viewer not ready" | If PR 3 isn't checked out yet, this is expected. Otherwise check: the `StudyInstanceUIDs` is valid (an invalid one never produces `VIEWER_READY` — accepted MVP behavior, `ARCHITECTURE.md` §10.10, OHIF shows its own error in the iframe); or see `ARCHITECTURE.md` §6, and `IMPLEMENTATION_NOTES.md` §3 |
+| Host never leaves "viewer not ready" | Check the `StudyInstanceUIDs` is valid (an invalid one never produces `VIEWER_READY` — accepted MVP behavior, `ARCHITECTURE.md` §10.10, OHIF shows its own error in the iframe); or see `ARCHITECTURE.md` §6, and `IMPLEMENTATION_NOTES.md` §3 |
 | `pnpm --filter host-app run dev` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED ... rollup/package.json ... './parseAst'` | The workspace-wide `rollup: 2.80.0` override (synced from upstream, `pnpm-workspace.yaml`) is older than what Vite 5's bundled Rollup needs. Fixed by the scoped `'vite>rollup': 4.24.0` override added alongside it — re-run `pnpm run install:update-lockfile` if you see this. |
 | `pnpm run install:update-lockfile` hangs indefinitely with no CPU/network activity | Observed once in this environment as an apparent pnpm store-index deadlock, unrelated to any of our changes. Kill the `pnpm install` process and retry; it completed normally (`Done in ~4-9s`) on the next attempt. |
+| A row's value looks stale after drawing | Accepted limitation (PR 5): if OHIF emits an `MEASUREMENT_UPDATED` for the same annotation after the 200 ms settle-and-replace debounce has already closed and its message has already been sent, that later update is not forwarded — the row stays `ready` with the earlier value. See `ARCHITECTURE.md` §10.12. |
 
 ## Further reading
 
