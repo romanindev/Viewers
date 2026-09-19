@@ -119,6 +119,92 @@ export function useScoringForm(bridge: ViewerBridge) {
     });
   }, [bridge.activationFailed]);
 
+  // Viewer-originated: the bridge detected a manual OHIF toolbar switch
+  // away from EllipticalROI while this row was armed (ARCHITECTURE.md §6
+  // "manual toolbar switching"). The viewer has already torn down its own
+  // `armed` state and left the user's newly chosen tool alone — this effect
+  // must only update local state, never call `cancel`/`sendCommand`
+  // (no `DEACTIVATE_TOOL` echo, §9 echo-loop prevention). Kept as its own
+  // reducer action, distinct from the host-initiated `CANCEL_REQUESTED`
+  // path `cancel()` above dispatches.
+  useEffect(() => {
+    const cancelled = bridge.activationCancelled;
+    if (!cancelled) {
+      return;
+    }
+
+    if (
+      activeRef.current?.rowId === cancelled.rowId &&
+      activeRef.current.activationId === cancelled.activationId
+    ) {
+      activeRef.current = null;
+    }
+
+    dispatch({
+      type: 'ACTIVATION_CANCELLED',
+      rowId: cancelled.rowId,
+      activationId: cancelled.activationId,
+      reason: cancelled.reason,
+    });
+  }, [bridge.activationCancelled]);
+
+  // Drawing ends here, not when the value later settles (ARCHITECTURE.md
+  // §6, §10.12): clear the single armed/pending slot now so a different row
+  // can be activated immediately, exactly mirroring the viewer clearing its
+  // own `armed` at the same instant.
+  useEffect(() => {
+    const completed = bridge.measurementCompleted;
+    if (!completed) {
+      return;
+    }
+
+    if (
+      activeRef.current?.rowId === completed.rowId &&
+      activeRef.current.activationId === completed.activationId
+    ) {
+      activeRef.current = null;
+    }
+
+    dispatch({
+      type: 'MEASUREMENT_COMPLETED',
+      rowId: completed.rowId,
+      activationId: completed.activationId,
+      measurementId: completed.measurementId,
+    });
+  }, [bridge.measurementCompleted]);
+
+  // The row is already `processing` (armed slot cleared above) by the time
+  // this arrives, so there is nothing to do to `activeRef` here.
+  useEffect(() => {
+    const added = bridge.measurementAdded;
+    if (!added) {
+      return;
+    }
+
+    dispatch({
+      type: 'MEASUREMENT_ADDED',
+      rowId: added.rowId,
+      activationId: added.activationId,
+      measurementId: added.measurementId,
+      value: added.measurement.value,
+      unit: added.measurement.unit,
+    });
+  }, [bridge.measurementAdded]);
+
+  useEffect(() => {
+    const failed = bridge.measurementFailed;
+    if (!failed) {
+      return;
+    }
+
+    dispatch({
+      type: 'MEASUREMENT_FAILED',
+      rowId: failed.rowId,
+      activationId: failed.activationId,
+      reason: failed.reason,
+    });
+  }, [bridge.measurementFailed]);
+
   // Cancels any pending/armed drawing intent on unmount, mirroring the
   // viewer's own dispose-time cleanup (extensions/scoring-form-bridge) —
   // ARCHITECTURE.md §8. `cancel` is stable (see above), so this only runs

@@ -58,13 +58,11 @@ export function App() {
             >
               <span style={{ flex: '1 1 auto' }}>
                 {row.status}
+                {row.status === 'ready' && row.value !== null ? ` — ${row.value} ${row.unit}` : ''}
                 {row.failureReason ? ` — ${row.failureReason}` : ''}
               </span>
-              {row.status === 'drawing' ? (
-                <button onClick={() => cancel(row.id)}>Cancel</button>
-              ) : (
-                <button onClick={() => activate(row.id)}>Activate</button>
-              )}
+              {row.status === 'drawing' && <button onClick={() => cancel(row.id)}>Cancel</button>}
+              {row.status === 'waiting' && <button onClick={() => activate(row.id)}>Activate</button>}
             </li>
           ))}
         </ul>

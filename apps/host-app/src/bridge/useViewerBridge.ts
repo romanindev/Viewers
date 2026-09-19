@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MESSAGE_TYPE, isBridgeMessageFromSender } from '@scoring-form/message-contract';
+import {
+  MESSAGE_TYPE,
+  isBridgeMessageFromSender,
+  type BridgeMeasurementValue,
+} from '@scoring-form/message-contract';
 
 import { VIEWER_ORIGIN } from '../config';
 import { CommandQueue, type QueuedCommand } from './commandQueue';
@@ -16,11 +20,44 @@ export type ActivationFailedEvent = {
   reason: string;
 };
 
+export type MeasurementCompletedEvent = {
+  messageId: string;
+  rowId: string;
+  activationId: string;
+  measurementId: string;
+};
+
+export type MeasurementAddedEvent = {
+  messageId: string;
+  rowId: string;
+  activationId: string;
+  measurementId: string;
+  measurement: BridgeMeasurementValue;
+};
+
+export type MeasurementFailedEvent = {
+  messageId: string;
+  rowId: string;
+  activationId: string;
+  reason: string;
+};
+
+export type ActivationCancelledEvent = {
+  messageId: string;
+  rowId: string;
+  activationId: string;
+  reason: string;
+};
+
 export type ViewerBridge = ViewerReadiness & {
   resetForNavigation: () => void;
   sendCommand: (command: QueuedCommand) => void;
   cancelQueuedActivation: (rowId: string) => boolean;
   activationFailed: ActivationFailedEvent | null;
+  measurementCompleted: MeasurementCompletedEvent | null;
+  measurementAdded: MeasurementAddedEvent | null;
+  measurementFailed: MeasurementFailedEvent | null;
+  activationCancelled: ActivationCancelledEvent | null;
 };
 
 const NOT_READY: ViewerReadiness = { ready: false, viewerInstanceId: null };
@@ -29,14 +66,24 @@ const NOT_READY: ViewerReadiness = { ready: false, viewerInstanceId: null };
  * Installs a validating `message` listener before the iframe `src` is
  * assigned, so an early `VIEWER_READY` cannot be missed by timing. Handles
  * `VIEWER_READY` (stores readiness + `viewerInstanceId`, flushes the
- * pre-ready command queue) and `ACTIVATION_FAILED` (surfaced via
- * `activationFailed`, a fresh object per message so callers can key a
- * `useEffect` off it). Also owns outbound `ACTIVATE_TOOL` / `DEACTIVATE_TOOL`
- * dispatch: `sendCommand` posts immediately when ready, otherwise queues.
+ * pre-ready command queue), `ACTIVATION_FAILED`, `MEASUREMENT_COMPLETED`,
+ * `MEASUREMENT_ADDED`, `MEASUREMENT_FAILED` and `ACTIVATION_CANCELLED` —
+ * each surfaced as its own piece of state, a fresh object per message so
+ * callers can key a `useEffect` off it. Also owns outbound `ACTIVATE_TOOL` /
+ * `DEACTIVATE_TOOL` dispatch: `sendCommand` posts immediately when ready,
+ * otherwise queues.
  */
 export function useViewerBridge(iframeRef: React.RefObject<HTMLIFrameElement>): ViewerBridge {
   const [readiness, setReadiness] = useState<ViewerReadiness>(NOT_READY);
   const [activationFailed, setActivationFailed] = useState<ActivationFailedEvent | null>(null);
+  const [measurementCompleted, setMeasurementCompleted] = useState<MeasurementCompletedEvent | null>(
+    null
+  );
+  const [measurementAdded, setMeasurementAdded] = useState<MeasurementAddedEvent | null>(null);
+  const [measurementFailed, setMeasurementFailed] = useState<MeasurementFailedEvent | null>(null);
+  const [activationCancelled, setActivationCancelled] = useState<ActivationCancelledEvent | null>(
+    null
+  );
   const readyRef = useRef(false);
   const queueRef = useRef(new CommandQueue());
 
@@ -108,9 +155,55 @@ export function useViewerBridge(iframeRef: React.RefObject<HTMLIFrameElement>): 
         return;
       }
 
-      // MEASUREMENT_ADDED / MEASUREMENT_UPDATED handling lands in PR 5.
+      if (data.type === MESSAGE_TYPE.MEASUREMENT_COMPLETED) {
+        const { rowId, activationId, measurementId } = data.payload;
+        // eslint-disable-next-line no-console
+        console.info('[viewer-bridge] MEASUREMENT_COMPLETED received', {
+          rowId,
+          activationId,
+          measurementId,
+        });
+        setMeasurementCompleted({ messageId: data.messageId, rowId, activationId, measurementId });
+        return;
+      }
+
+      if (data.type === MESSAGE_TYPE.MEASUREMENT_ADDED) {
+        const { rowId, activationId, measurementId, measurement } = data.payload;
+        // eslint-disable-next-line no-console
+        console.info('[viewer-bridge] MEASUREMENT_ADDED received', {
+          rowId,
+          activationId,
+          measurementId,
+          measurement,
+        });
+        setMeasurementAdded({ messageId: data.messageId, rowId, activationId, measurementId, measurement });
+        return;
+      }
+
+      if (data.type === MESSAGE_TYPE.MEASUREMENT_FAILED) {
+        const { rowId, activationId, reason } = data.payload;
+        // eslint-disable-next-line no-console
+        console.warn('[viewer-bridge] MEASUREMENT_FAILED received', { rowId, activationId, reason });
+        setMeasurementFailed({ messageId: data.messageId, rowId, activationId, reason });
+        return;
+      }
+
+      if (data.type === MESSAGE_TYPE.ACTIVATION_CANCELLED) {
+        const { rowId, activationId, reason } = data.payload;
+        // eslint-disable-next-line no-console
+        console.warn('[viewer-bridge] ACTIVATION_CANCELLED received', {
+          rowId,
+          activationId,
+          reason,
+        });
+        setActivationCancelled({ messageId: data.messageId, rowId, activationId, reason });
+        return;
+      }
+
+      // MEASUREMENT_UPDATED (optional star task 5.1 live forwarding) is not
+      // implemented — validated and discarded, per PR 5 scope.
       // eslint-disable-next-line no-console
-      console.info('[viewer-bridge] discarded valid message (handling lands in a later PR)', data);
+      console.info('[viewer-bridge] discarded valid message (not implemented in this scope)', data);
     };
 
     window.addEventListener('message', handleMessage);
@@ -146,5 +239,15 @@ export function useViewerBridge(iframeRef: React.RefObject<HTMLIFrameElement>): 
     setReadiness(NOT_READY);
   }, []);
 
-  return { ...readiness, resetForNavigation, sendCommand, cancelQueuedActivation, activationFailed };
+  return {
+    ...readiness,
+    resetForNavigation,
+    sendCommand,
+    cancelQueuedActivation,
+    activationFailed,
+    measurementCompleted,
+    measurementAdded,
+    measurementFailed,
+    activationCancelled,
+  };
 }
