@@ -2,7 +2,7 @@
 
 Bridge between an OHIF Viewer fork in an iframe and a React scoring form on a different origin, communicating over `window.postMessage`.
 
-> **Status.** Design document, partially implemented: the host app, the shared message contract, the viewer bridge extension, the `VIEWER_READY` handshake, tool activation/cancellation, and measurement correlation (settle-and-replace debounce, manual-toolbar-switch cancellation) are all merged to `master`. **Totals (§7) are implemented and verified** on branch `feat/unit-safe-totals` (`adf132acc`, GitHub PR #6) — open and ready for review, **not yet merged to `master`**. `IMPLEMENTATION_PLAN.md` is the single source of truth for per-PR status, commit hashes, and scope — see it for the full history rather than duplicating that here.
+> **Status.** Design document, partially implemented: the host app, the shared message contract, the viewer bridge extension, the `VIEWER_READY` handshake, tool activation/cancellation, and measurement correlation (settle-and-replace debounce, manual-toolbar-switch cancellation) are all merged to `master`. **Totals (§7) are implemented and verified** and merged into master via PR #6 (merge commit a67579597). `IMPLEMENTATION_PLAN.md` is the single source of truth for per-PR status, commit hashes, and scope — see it for the full history rather than duplicating that here.
 >
 > **Scope.** Deliberately short, as the assignment asks (`ASSIGNMENT.pdf` p.4 §7.2 — *"1–2 pages is enough, but substantive"*). Supporting evidence, `file:line` citations and open technical questions live in **`docs/scoring-form/IMPLEMENTATION_NOTES.md`**.
 >

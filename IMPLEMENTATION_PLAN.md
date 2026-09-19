@@ -345,7 +345,7 @@ Fix: the bridge subscribes to `toolGroupService.EVENTS.PRIMARY_TOOL_ACTIVATED` (
 - Cancel is not offered/has no effect while a row is `processing`, and never deletes a completed annotation;
 - an `MEASUREMENT_UPDATED` arriving after the 200 ms settle window is observed to NOT be forwarded (documented limitation, not a bug).
 
-## PR 6 — `feat: add unit-safe totals and final required UX` — ⏳ IMPLEMENTED AND VERIFIED, AWAITING MERGE (`adf132acc`; GitHub PR #6, branch `feat/unit-safe-totals`)
+## PR 6 — `feat: add unit-safe totals and final required UX` — ✅ MERGED (Implementation commit: `adf132acc`, Documentation commit: `9fefd7b13`, Merge commit: `a67579597`, GitHub PR #6)
 
 ### Goal
 
