@@ -227,7 +227,7 @@ An additional iframe-lifecycle fix was required during this verification: readin
 
 ## PR 4 — `feat: activate and cancel ellipse from scoring form` — ✅ MERGED (`c740ce731`; docs `4c3d0858`, implementation `e169f8096`)
 
-Activation, cancellation, and the `VIEWER_READY` handshake are implemented and browser-verified per the critical cases below. Measurement correlation (PR 5) and totals (PR 6) are not implemented yet.
+Activation, cancellation, and the `VIEWER_READY` handshake are implemented and browser-verified per the critical cases below. Measurement correlation (PR 5) is now implemented and merged — see below. Totals (PR 6) are not implemented yet.
 
 ### Goal
 
@@ -273,7 +273,7 @@ Critical cases:
 7. an activation attempted with no viewport/tool group is detected as a failure — the row stays `waiting` and the host receives `ACTIVATION_FAILED`, not a silently armed row;
 8. a late/duplicate `ACTIVATION_FAILED` carrying a superseded `activationId` is dropped by the host.
 
-## PR 5 — `feat: correlate OHIF measurements with form rows` — design finalized, not implemented
+## PR 5 — `feat: correlate OHIF measurements with form rows` — ✅ MERGED (`9cbececba`; docs `bdd55d8b0`, GitHub PR #5)
 
 ### Goal
 

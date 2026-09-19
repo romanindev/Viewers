@@ -61,11 +61,9 @@ Verified baseline:
 
 The audit findings are recorded in `docs/scoring-form/IMPLEMENTATION_NOTES.md`, summarised in `ARCHITECTURE.md`, and scheduled in `IMPLEMENTATION_PLAN.md`.
 
-## Next step
+## PR status
 
-**PR 1** (`docs: establish assignment requirements and implementation plan`) and **PR 2** (`feat: bootstrap host app and shared message contract`) are merged. The host app, the shared message contract, and the workspace wiring exist and are verified working — see `docs/scoring-form/README.md` for what actually runs today.
-
-**PR 3** (`feat: add OHIF bridge extension and readiness handshake`) is next, exactly as scoped in `IMPLEMENTATION_PLAN.md`. It adds the viewer-side bridge extension and a trustworthy `VIEWER_READY`. It has **not** started — no `extensions/scoring-form-bridge`, no `pluginConfig.json` change, no working handshake exist yet.
+`IMPLEMENTATION_PLAN.md` is the single source of truth for which PRs are merged, what each one scoped, and what is next. Do not duplicate that status here — read it directly before starting or resuming work.
 
 ## Working rules
 

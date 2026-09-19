@@ -74,7 +74,7 @@ Target custom structure:
 
 The existing OHIF `platform/`, `extensions/`, `modes/`, build configuration, and upstream code should remain as close to upstream as reasonably possible.
 
-**[VERIFIED]** `pnpm-workspace.yaml:1-4` declares only `platform/*`, `extensions/*`, `modes/*`. `apps/*` and `packages/*` must be added. `extensions/*` already covers our bridge extension, so no glob change is needed for it.
+**[CLOSED, PR 2, merged]** `pnpm-workspace.yaml` `packages:` now lists `platform/*`, `extensions/*`, `modes/*`, `apps/*`, `packages/*` — the last two were added in PR 2. `extensions/*` already covered our bridge extension, so no glob change was needed for it.
 
 ## OHIF baseline — verified
 
@@ -104,8 +104,8 @@ Do not re-select or move the baseline. Record these values in the final README.
 
   Commit the updated `pnpm-lock.yaml` in the same PR.
 - `minimumReleaseAge: 2880` (line 11, 48 h) — very recently published versions are rejected at install time. Pin exact dependency versions that are at least 48 h old.
-- `allowBuilds` (lines 39-46) — postinstall scripts are denied unless allowlisted. `esbuild` is **not** listed. **[UNVERIFIED]** whether a Vite host app needs `esbuild: true` added; the first install will show it. Do not pre-emptively edit the allowlist.
-- `nodeLinker: hoisted` (line 7) — a single hoisted `react@18.3.1` at the repo root. **[PROPOSED]** pin the host app to `react`/`react-dom` `18.3.1` to avoid hoist interference with the viewer.
+- `allowBuilds` — **[CLOSED, PR 2, merged]** `esbuild: true` was required and added, with a comment explaining why (Vite's postinstall needs it to fetch its platform binary; without it, install fails with `ERR_PNPM_IGNORED_BUILDS`). A second, unanticipated fix was needed alongside it: a more specific `'vite>rollup': 4.24.0` override, because the workspace's shared `rollup: 2.80.0` pin is too old for Vite 5's bundled Rollup. Full rationale: `ARCHITECTURE.md` §10.9a.
+- `nodeLinker: hoisted` (line 7) — a single hoisted `react@18.3.1` at the repo root. **[CLOSED, PR 2, merged]** the host app is pinned to `react`/`react-dom` `18.3.1` to avoid hoist interference with the viewer.
 
 ## Hard constraints from the task
 
@@ -137,10 +137,11 @@ Optional work comes only after the required flow is solid.
 
 The host scoring form should use an explicit reducer/state-machine-like model, not scattered booleans.
 
-A row should have a stable `rowId`. Suggested state:
+A row should have a stable `rowId`. Actual shipped state (`waiting → drawing → processing → ready`, `processing → waiting` on failure — `ARCHITECTURE.md` §10.8):
 
 - `waiting`
 - `drawing`
+- `processing`
 - `ready`
 
 Additional internal metadata may include:
@@ -190,21 +191,9 @@ So the area is at `Object.values(measurement.data)[0]?.area`, and the unit at `.
 
 **[VERIFIED]** `MEASUREMENT_ADDED` fires on drawing **completion**, not on first appearance. `platform/core/src/services/MeasurementService/MeasurementService.ts:541-575` only broadcasts when a previous entry already exists; the `ANNOTATION_ADDED` pass stores silently and the `ANNOTATION_COMPLETED` pass emits (`extensions/cornerstone/src/initMeasurementService.ts:340-341`). Payload is `{ source, measurement }`.
 
-**[UNVERIFIED] — open question, must be settled with a real logged event before PR 5.** `cachedStats` is computed inside the Cornerstone render pass, not on mouse-up, and updates are throttled (100 ms, trailing):
+**[CLOSED with runtime evidence, PR 5, merged]** `cachedStats` is computed inside the Cornerstone render pass, not on mouse-up, and updates are throttled (100 ms, trailing) — `node_modules/@cornerstonejs/tools/dist/esm/tools/annotation/EllipticalROITool.js:408-421,606,186`. A finite area at `MEASUREMENT_ADDED` is not necessarily the final one (observed: `4214.7176 px²` at `MEASUREMENT_ADDED`, `26601.9840 px²` 51 ms later at `MEASUREMENT_UPDATED`, matching OHIF's own display).
 
-- `node_modules/@cornerstonejs/tools/dist/esm/tools/annotation/EllipticalROITool.js:408-421` — stats computed in `renderAnnotation`;
-- `:606` — `_throttledCalculateCachedStats`, 100 ms trailing;
-- `:186` — `triggerAnnotationCompleted` fires from `_endCallback` (mouse-up).
-
-Therefore, at `MEASUREMENT_ADDED` time the area may be `null` (very fast click-drag-release) or up to ~100 ms stale (not the final geometry). `measurement.data` is also a **live reference** that keeps mutating after the event.
-
-Required approach:
-
-1. Log one real `MEASUREMENT_ADDED` (and the following `MEASUREMENT_UPDATED`) for a slow draw and for a fast draw.
-2. Only then choose a mitigation. Candidates, none yet selected: adapter returns `null` on non-finite area and the bridge waits for the first `MEASUREMENT_UPDATED` for that `uid`; or re-read on the next animation frame; or both.
-3. Record the chosen mitigation and the evidence in `docs/scoring-form/IMPLEMENTATION_NOTES.md` §5.3, and add the decision to `ARCHITECTURE.md` §10 (Accepted Decisions).
-
-Do not pick one of these without the logged evidence, and do not present a guess as verified.
+**Chosen mitigation — settle-and-replace, 200 ms debounce:** decouple immediate tool/armed cleanup (at OHIF's drawing-completion event) from value forwarding (debounced per `measurementId`, replacing a held snapshot on every relevant update, sending the bridge's `MEASUREMENT_ADDED`/`MEASUREMENT_FAILED` once 200 ms pass with no further event). Full rationale, evidence, and the explicit "not a finality guarantee" caveat: `ARCHITECTURE.md` §10.12, `docs/scoring-form/IMPLEMENTATION_NOTES.md` §5.3. This is implemented, not merely designed — do not reopen it without new evidence that the 200 ms window is insufficient.
 
 Create one small adapter in the viewer extension, e.g.:
 
@@ -240,7 +229,7 @@ if (!toolGroup?.hasTool(toolName)) return;
 
 `commandsManager.runCommand` returns `undefined` on both success and each of these failures (`platform/core/src/classes/CommandsManager.ts:153-178`). A "successful" activation call therefore proves nothing.
 
-Required: after issuing activation the bridge must **read back** the actual state — e.g. confirm `toolGroup.getActivePrimaryMouseButtonTool() === 'EllipticalROI'` — and treat a mismatch as a failure rather than arming the row. How a failure is surfaced to the host is **[OPEN]** and not yet designed; see `docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 3.
+Required: after issuing activation the bridge must **read back** the actual state — e.g. confirm `toolGroup.getActivePrimaryMouseButtonTool() === 'EllipticalROI'` — and treat a mismatch as a failure rather than arming the row. **[CLOSED, PR 4, merged]** A failure (thrown/rejected activation, or a read-back mismatch) is surfaced via a dedicated `ACTIVATION_FAILED { rowId, activationId, reason }` message, viewer → host; see `ARCHITECTURE.md` §10.11.
 
 This is the concrete mechanism behind a "lost Activate", and it is the most likely source of that bug. An activation sent immediately after `VIEWER_READY` must not disappear because no viewport or tool group exists yet.
 
@@ -405,17 +394,9 @@ EllipticalROI
 
 **[VERIFIED]** it is registered in the `default` tool group's `passive` list — `modes/basic/src/initToolGroups.ts:65`; the tool group id is the literal string `'default'` (`:312`).
 
-Use the checked-out OHIF `commandsManager` / `toolbarService` API and the current command context. Do not bypass OHIF services through `window`.
+Use the checked-out OHIF `commandsManager` API and the current command context. Do not bypass OHIF services through `window`.
 
-**[VERIFIED]** available integration points:
-
-| Purpose | API | Source |
-|---|---|---|
-| Activate as if the user clicked the toolbar (runs the command **and** refreshes toolbar state) | `toolbarService.recordInteraction('EllipticalROI', { refreshProps: { viewportId } })` | `platform/core/src/services/ToolBarService/ToolbarService.ts:226-289` |
-| Lower-level activation | `commandsManager.runCommand('setToolActiveToolbar', { toolName }, 'CORNERSTONE')` then `toolbarService.refreshToolbarState({ viewportId })` | `extensions/cornerstone/src/commandsModule.ts:1199-1208`, `:2619` |
-| Cancel an in-progress drawing | `commandsManager.runCommand('cancelMeasurement', {}, 'CORNERSTONE')` | `extensions/cornerstone/src/commandsModule.ts:317-322` |
-
-**[PROPOSED]** prefer `recordInteraction` so the toolbar highlight stays in sync; a direct `setToolActive` call leaves the toolbar UI stale.
+**[CLOSED, PR 4, merged]** Activation API decided: `commandsManager.runCommand('setToolActiveToolbar', { toolName: 'EllipticalROI' }, 'CORNERSTONE')` (`extensions/cornerstone/src/commandsModule.ts:1198-1207`), not `toolbarService.recordInteraction`. Cancel an in-progress drawing via `commandsManager.runCommand('cancelMeasurement', {}, 'CORNERSTONE')` (`:317-322`). Full rationale for choosing `setToolActiveToolbar` over `recordInteraction`: `ARCHITECTURE.md` §10.11.
 
 Activation success must be read back, not assumed — see principle 4a.
 
@@ -435,13 +416,9 @@ This replaces the earlier capture-and-restore design, which was rejected: if the
 
 ## Measurement events
 
-Required:
+**[CLOSED, PR 5, merged]** The bridge subscribes to OHIF's own `measurementService.EVENTS.MEASUREMENT_ADDED` **and** `.MEASUREMENT_UPDATED` internally — not because live sync (star task 5.1) is implemented, but because both events feed the settle-and-replace debounce that finalizes a single value (§10.12 above). The bridge's own outbound protocol messages are `MEASUREMENT_COMPLETED` (drawing-completion trigger), `MEASUREMENT_ADDED` (settle succeeded), and `MEASUREMENT_FAILED` (settle failed) — see `ARCHITECTURE.md` §5 message table for exact payloads and timing.
 
-- subscribe to `MEASUREMENT_ADDED`.
-
-Recommended optional star task after required scope:
-
-- subscribe to `MEASUREMENT_UPDATED` and send `MEASUREMENT_UPDATED`.
+The bridge's own `MEASUREMENT_UPDATED` (viewer → host, for an already-`ready` row) remains star task 5.1 and is not sent by the mandatory path.
 
 Before forwarding an event, ensure it belongs to the bridge-managed annotation.
 

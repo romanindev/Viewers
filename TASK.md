@@ -190,7 +190,7 @@ Preserve the unit.
 
 Do not add unlike units into one total.
 
-> **Verified.** `node_modules/@cornerstonejs/tools/dist/esm/utilities/getCalibratedUnits.js:41-103` — `areaUnit` is `'mm²'` with pixel spacing and `'px²'` without (`²` is U+00B2), plus a calibration suffix when present (`'mm² ERMF'`, `'cm² US Region'`, …). The unit is an open string set, not an enum. See `ARCHITECTURE.md` §14.
+> **Verified.** `node_modules/@cornerstonejs/tools/dist/esm/utilities/getCalibratedUnits.js:41-103` — `areaUnit` is `'mm²'` with pixel spacing and `'px²'` without (`²` is U+00B2), plus a calibration suffix when present (`'mm² ERMF'`, `'cm² US Region'`, …). The unit is an open string set, not an enum. See `ARCHITECTURE.md` §7.
 
 ### TypeScript
 

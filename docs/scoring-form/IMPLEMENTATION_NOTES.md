@@ -198,7 +198,7 @@ Event names — `MeasurementService.ts:71-83`: `MEASUREMENT_ADDED`, `MEASUREMENT
 
 `subscribe()` returns `{ unsubscribe }` — `platform/core/src/services/_shared/pubSubServiceInterface.ts:35-37`.
 
-### 5.3 ⚠ `cachedStats` timing — [CLOSED with runtime evidence], PR 5 design finalized (not yet implemented)
+### 5.3 ⚠ `cachedStats` timing — [CLOSED with runtime evidence], implemented in PR 5 (merged `9cbececba`)
 
 `cachedStats` is **not** computed on mouse-up. It is computed inside the Cornerstone render pass, and updates are throttled:
 
@@ -241,7 +241,7 @@ function toBridgeArea(measurement): BridgeMeasurementValue | null
 - copy primitives out — never forward the live `cachedStats` reference across `postMessage`;
 - return `null` for unsupported, malformed or not-yet-computed data.
 
-**[PR 5, not implemented]** this adapter is called on every relevant `MEASUREMENT_ADDED`/`MEASUREMENT_UPDATED` while the 200 ms settle-and-replace debounce (§10.12, `ARCHITECTURE.md` §10.12) is active for a `measurementId`; its `null`/non-`null` result is what the debounce's settle step uses to decide between the bridge's `MEASUREMENT_ADDED` and `MEASUREMENT_FAILED`.
+**[PR 5, merged]** this adapter is called on every relevant `MEASUREMENT_ADDED`/`MEASUREMENT_UPDATED` while the 200 ms settle-and-replace debounce (`ARCHITECTURE.md` §10.12) is active for a `measurementId`; its `null`/non-`null` result is what the debounce's settle step uses to decide between the bridge's `MEASUREMENT_ADDED` and `MEASUREMENT_FAILED`.
 
 ---
 
@@ -331,16 +331,16 @@ None of these may be silently resolved. Resolving one means: gather the stated e
 
 | # | Question | Target PR | Evidence needed to close |
 |---|---|---|---|
-| 4 | **Readiness fallback** — `VIEWPORTS_READY` never fires if the study or hanging protocol fails, so `VIEWER_READY` would never be sent. Timeout, secondary signal, or explicit error message? | **PR 3** | Observe a deliberately broken `StudyInstanceUIDs` in the iframe |
-| 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | **PR 6** (first test PR) | Decide when the first test is written (§9.2) |
-| 6 | **`esbuild` build scripts** — does the Vite host app need `esbuild: true` in `pnpm-workspace.yaml` `allowBuilds`? | **PR 2** | The first `pnpm run install:update-lockfile` plus a host dev-server start. Do not pre-emptively edit the allowlist; if needed, add it with a comment explaining why. |
+| 5 | **Contract test location** — `packages/*` is outside the root Jest project globs. Colocate contract tests in the bridge extension (needs its own `jest.config.js`) or add a `packages/*` project glob? | **PR 6** (first test PR) | Decide when the first test is written (§9.2) — still genuinely open; `jest.config.js:10-14` still globs only `platform/*` and `extensions/*` as of `14f761f0d`. |
 
-Items 4 and 6 are listed here as originally scoped; `ARCHITECTURE.md` §10.10 and §10.9a already record MVP-accepted closures for them — this table has not been reconciled with those sections, and that reconciliation is out of scope for this pass.
+Items 4 and 6, originally scoped here, are reconciled below — both are already closed with MVP-accepted decisions recorded in `ARCHITECTURE.md`, not left open.
 
 Closed during documentation finalization:
 
 | Question | Resolution |
 |---|---|
+| **Readiness fallback** (was item 4) | No diagnostic timeout, no new failure message type, no contract change for the mandatory MVP scope — an invalid `StudyInstanceUID` never fires `VIEWPORTS_READY`, so the host correctly stays "not ready" indefinitely and OHIF's own error UI is visible inside the iframe. Browser-verified in PR 3. Recorded in `ARCHITECTURE.md` §10.10. |
+| **`esbuild` build scripts** (was item 6) | `allowBuilds: { esbuild: true }` was required (Vite's postinstall needs it); a second, unanticipated `'vite>rollup': 4.24.0` override was also needed alongside the shared `rollup: 2.80.0` pin. Closed in PR 2, verified: host dev server boots, `pnpm run build` unaffected. Recorded in `ARCHITECTURE.md` §10.9a. |
 | Which tool to restore after a measurement | Deactivate `EllipticalROI`, activate `WindowLevel` (§4.3). Replaces the earlier capture-and-restore design, which could leave another annotation tool armed. |
 | `ARCHITECTURE.md` length vs the assignment's "1–2 pages" | `ARCHITECTURE.md` kept concise and reviewer-oriented; supporting evidence moved to this file. |
 | Role wording | Aligned with `ASSIGNMENT.pdf` p.1: *Frontend Developer (React / TypeScript)*. |
@@ -348,8 +348,9 @@ Closed during documentation finalization:
 | **Activation-failure reporting** (was item 3) | New `ACTIVATION_FAILED { rowId, activationId, reason }` message, viewer → host; stale `activationId` dropped by the host under the same rule as every other correlated message. Recorded in `ARCHITECTURE.md` §5, §10.11. |
 | **Pre-ready queue + cancellation** (new, PR 4) | Cancellation is a queue edit, not a second message, while `ACTIVATE_TOOL` is still queued: it is removed from the FIFO before flush and no `DEACTIVATE_TOOL` is sent. `DEACTIVATE_TOOL` is sent only once the corresponding `ACTIVATE_TOOL` has already been dispatched to the viewer. Recorded in `ARCHITECTURE.md` §5, §6, §10.3. |
 | **Fixed `WindowLevel` restore** (new, PR 4) | Confirmed no-capture design (§4.3 above) agreed for PR 4 implementation; `IMPLEMENTATION_PLAN.md` PR 4 wording aligned to match. Already recorded as an Accepted Decision in `ARCHITECTURE.md` §10.7 — no separate PR 4 decision needed. |
-| **`cachedStats` timing** (was item 1) | Closed with runtime evidence (§5.3): settle-and-replace 200 ms debounce, decoupled from immediate tool/armed cleanup at drawing completion. Explicitly not a finality guarantee. Recorded in `ARCHITECTURE.md` §10.12. Design only — PR 5 implementation pending. |
-| **New protocol messages for value finalization** (new, PR 5 design) | `MEASUREMENT_COMPLETED { rowId, activationId, measurementId }` (drawing-completion trigger, immediate) and `MEASUREMENT_FAILED { rowId, activationId, reason }` (settle timeout with no valid area/unit) added to the message table; row model extended `waiting → drawing → processing → ready`, with `processing → waiting` on failure. A `processing` row is not pending/armed and does not block activating a different row; its pending debounce/correlation is keyed per `measurementId`, independent of the single armed slot, and is unaffected by canceling a different, later activation. Recorded in `ARCHITECTURE.md` §5, §6, §10.8, §10.12. Design only — PR 5 implementation pending. |
+| **`cachedStats` timing** (was item 1) | Closed with runtime evidence (§5.3): settle-and-replace 200 ms debounce, decoupled from immediate tool/armed cleanup at drawing completion. Explicitly not a finality guarantee. Recorded in `ARCHITECTURE.md` §10.12. Implemented and merged in PR 5 (`9cbececba`). |
+| **New protocol messages for value finalization** (PR 5) | `MEASUREMENT_COMPLETED { rowId, activationId, measurementId }` (drawing-completion trigger, immediate) and `MEASUREMENT_FAILED { rowId, activationId, reason }` (settle timeout with no valid area/unit) added to the message table; row model extended `waiting → drawing → processing → ready`, with `processing → waiting` on failure. A `processing` row is not pending/armed and does not block activating a different row; its pending debounce/correlation is keyed per `measurementId`, independent of the single armed slot, and is unaffected by canceling a different, later activation. Recorded in `ARCHITECTURE.md` §5, §6, §10.8, §10.12. Implemented and merged in PR 5 (`9cbececba`). |
+| **Manual toolbar switching invalidates an armed intent** (PR 5) | Bridge subscribes to `toolGroupService.EVENTS.PRIMARY_TOOL_ACTIVATED`; a manual switch away from `EllipticalROI` while a row is armed clears `armed` and sends `ACTIVATION_CANCELLED`. Recorded in `ARCHITECTURE.md` §10.13. Implemented and merged in PR 5 (`9cbececba`). |
 
 ---
 
