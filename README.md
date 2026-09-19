@@ -1,5 +1,104 @@
-> **Reviewer setup guide:** for the Viewer + Scoring Form task, see
-> [`docs/scoring-form/README.md`](docs/scoring-form/README.md).
+# Viewer + Scoring Form
+
+An [OHIF Viewer](https://ohif.org/) fork embedded in a small React host app: the viewer runs in an iframe on one origin, a companion "scoring form" runs on another, and the two talk over a `postMessage` bridge so a reviewer can activate a measurement tool, draw an `EllipticalROI` in the viewer, and see its value land in the correct form row with a unit-safe running total.
+
+## Key features
+
+- Cross-origin viewer ↔ host handshake (`VIEWER_READY`), with a pre-ready command queue so an early "Activate" click is never lost.
+- Per-row tool activation and cancellation, with mandatory read-back verification that the tool actually became active before the row is armed.
+- Measurement correlation back to the originating form row, with a settle-and-replace debounce to account for OHIF's `cachedStats` still updating after the drawing-completion event.
+- Unit-safe totals: values are grouped and summed by their exact unit string (e.g. `mm²` vs `px²` are never mixed).
+
+## Tech stack
+
+- **Viewer:** OHIF Viewer 3 / Cornerstone3D (this repository), extended with a small bridge extension (`extensions/scoring-form-bridge`).
+- **Host app:** React 18 + TypeScript + Vite + Tailwind CSS (`apps/host-app`).
+- **Shared contract:** a dependency-free TypeScript package defining the `postMessage` protocol (`packages/message-contract`).
+- **Workspace:** pnpm workspaces (`pnpm-workspace.yaml`).
+
+## Architecture overview
+
+The host app renders a full-height iframe (the OHIF viewer) next to a scoring form. Both sides validate `event.origin` and `event.source` on every message and share message-type definitions from `packages/message-contract`. The host owns `rowId`/`activationId`; the viewer owns `measurementId` (the Cornerstone annotation UID) — each side only ever issues the ID it controls, and stale/out-of-date messages are rejected by comparing `activationId`. Full diagram, message table, and accepted design decisions: [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+## Prerequisites
+
+- Node.js `24.15.0` (`.node-version`; `engines.node: >=24`)
+- pnpm `11.5.2` (`package.json` `packageManager`) — not auto-provisioned; install via Corepack or directly
+- A modern Chromium-based browser (WebGL2 required by Cornerstone)
+- No PACS, backend, database, or authentication needed — the viewer uses the public DICOMweb source that ships with OHIF by default
+
+## Clone and install
+
+```bash
+git clone https://github.com/romanindev/Viewers.git
+cd Viewers
+pnpm run install:update-lockfile
+```
+
+Use that script, not a plain `pnpm install` — `pnpm-workspace.yaml` sets `frozenLockfile: true`, which fails once the workspace includes the added `apps/*`/`packages/*` packages.
+
+## Run both applications
+
+Two terminals; the two apps must run on different origins (the bridge's origin validation depends on it).
+
+**Terminal 1 — viewer (OHIF), port `3000`:**
+
+```bash
+OHIF_OPEN=false pnpm run dev
+```
+
+**Terminal 2 — host app, port `5173`:**
+
+```bash
+pnpm --filter host-app run dev
+```
+
+| App | URL |
+|---|---|
+| Host app (start here) | http://localhost:5173 |
+| Viewer (loaded inside the host's iframe) | http://localhost:3000 |
+
+## Example study
+
+The host app's default study, verified against the public DICOMweb source:
+
+```
+http://localhost:3000/viewer?StudyInstanceUIDs=1.3.6.1.4.1.25403.345050719074.3824.20170125095438.5
+```
+
+It loads an MR series with pixel spacing, so `EllipticalROI` yields an area in `mm²`. Override with `VITE_VIEWER_STUDY_URL` (`apps/host-app/src/config.ts`).
+
+## Usage walkthrough
+
+Open `http://localhost:5173` once both dev servers are running:
+
+1. Click **Add Measurement** to create a row, then **Activate** on that row to arm `EllipticalROI` in the viewer.
+2. Draw an ellipse on the loaded image — the row moves through `drawing → processing → ready` and shows the measured value with its unit.
+3. Repeat for further rows — the **Total** panel sums ready rows grouped by their exact unit string.
+4. **Cancel** while a row is `drawing` to return it to `waiting` without affecting other rows or totals.
+
+## Known limitations
+
+- An `MEASUREMENT_UPDATED` arriving after the 200 ms settle-and-replace window has already closed is not forwarded — the row can display a stale value with no further correction.
+- An invalid `StudyInstanceUID` never produces `VIEWER_READY`; the host stays "not ready" indefinitely and OHIF shows its own error inside the iframe (accepted MVP behavior, no diagnostic timeout).
+- A reload/navigation of the iframe not initiated by the host cannot be reliably detected by the parent; it self-heals once a new `VIEWER_READY` arrives.
+- A concurrent, unrelated `EllipticalROI` created via some other path while a row is armed is not detected or guarded against.
+
+Full list with rationale: [`ARCHITECTURE.md` §11](ARCHITECTURE.md).
+
+## Further reading
+
+| Document | Purpose |
+|---|---|
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Diagram, message contract, accepted decisions, known limitations |
+| [`AI-USAGE.md`](AI-USAGE.md) | How AI was used during implementation |
+| [`docs/scoring-form/README.md`](docs/scoring-form/README.md) | Per-PR status table, verified baseline, and troubleshooting |
+
+---
+
+## Upstream OHIF documentation
+
+The rest of this file is the original, unmodified OHIF project README.
 
 <!-- prettier-ignore-start -->
 <div align="center">

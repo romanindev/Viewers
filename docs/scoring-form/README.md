@@ -1,4 +1,9 @@
-# Viewer + Scoring Form — setup guide
+# Viewer + Scoring Form — status, verified baseline, and troubleshooting
+
+> **Start here instead:** the clone-to-running-app quick start now lives in the
+> [repository root `README.md`](../../README.md). This file is the supplementary
+> reference — per-PR status, the verified baseline table, and troubleshooting —
+> kept for anyone who wants the detail behind that quick start.
 
 > ## Status: PR 2 – PR 6 merged into `master`; mandatory scope implemented
 >
@@ -10,7 +15,7 @@
 
 The assignment (`ASSIGNMENT.pdf` p.4 §7.2) requires a `README.md` that takes a reviewer from `git clone` to a working screen, and states that those steps will be **executed literally on a clean machine**. That is 25% of the grade (p.6 §10, "Working scenario").
 
-The repository root `README.md` is the **upstream OHIF readme**; PR 7 adds a short pointer near its top to this file, but otherwise leaves it untouched so the fork stays close to upstream and the diff stays reviewable.
+The repository root `README.md` now carries that quick start directly, ahead of the preserved, untouched upstream OHIF content. This file remains as the per-PR status record, the verified baseline, and troubleshooting reference.
 
 ## Status
 
@@ -20,8 +25,8 @@ The repository root `README.md` is the **upstream OHIF readme**; PR 7 adds a sho
 | Clone command shows the real public fork URL | ✅ yes | PR 7 |
 | Install (`pnpm run install:update-lockfile`) | ✅ yes — verified on this checkout | PR 2 |
 | Viewer starts on `:3000` and opens a study | ✅ yes (unmodified upstream OHIF) | baseline |
-| Exact `StudyInstanceUID` recorded and verified | ✅ yes — see "Known-good study" below | PR 2 |
-| Clean-machine run of this guide, verbatim | ⬜ **pending** — not yet re-verified from a clean clone since PR 7's edits | PR 7 |
+| Exact `StudyInstanceUID` recorded and verified | ✅ yes — see "Example study" in the root `README.md` | PR 2 |
+| Clean-clone setup verification | ✅ Completed before this README reorganization. The installation and startup commands are unchanged and were successfully executed from a fresh clone; see `IMPLEMENTATION_PLAN.md`, PR 7. | PR 7 |
 | Host app starts on `:5173` and shows the viewer in an iframe | ✅ yes | PR 2 |
 | Host `message` listener installed before iframe `src`, rejects wrong origin/version | ✅ yes | PR 2 |
 | Viewer announces `VIEWER_READY` | ✅ yes — browser-verified | PR 3 |
@@ -40,80 +45,9 @@ The repository root `README.md` is the **upstream OHIF readme**; PR 7 adds a sho
 | Viewer origin | `http://localhost:3000` |
 | Host origin | `http://localhost:5173` — verified, `strictPort: true` |
 
-## Prerequisites
-
-- Node `24.15.0` — the repository declares `engines.node: >=24` and pins `.node-version`.
-- pnpm `11.5.2` — declared as `packageManager`. Use Corepack or install it directly; note `.npmrc` sets `manage-package-manager-versions=false`, so pnpm is **not** auto-provisioned for you.
-- A modern Chromium-based browser (WebGL2 required by Cornerstone).
-- No PACS, backend, database or authentication is needed — the viewer uses the public DICOMweb source that ships with OHIF by default.
-
-## Install
-
-```bash
-git clone https://github.com/romanindev/Viewers.git
-cd Viewers
-pnpm run install:update-lockfile
-```
-
-**Use that script, not a plain `pnpm install`.** `pnpm-workspace.yaml:17` sets `frozenLockfile: true`, so a plain install fails as soon as the workspace contains our added `apps/*` and `packages/*` packages. The script maps to `pnpm install --no-frozen-lockfile` (`package.json:32`).
-
-Two further install-time constraints worth knowing if something fails — both documented in `IMPLEMENTATION_NOTES.md` §1.2:
-
-- `minimumReleaseAge: 2880` rejects any package published in the last 48 hours;
-- `allowBuilds` denies postinstall scripts unless allowlisted.
-
-## Run both applications
-
-Two terminals. The two applications **must** be on different origins — that is deliberate in the assignment (p.2 §4.2), and the bridge's origin validation depends on it.
-
-### Terminal 1 — viewer (OHIF), port 3000
-
-```bash
-OHIF_OPEN=false pnpm run dev
-```
-
-`OHIF_OPEN=false` suppresses the automatic browser tab, which is noise when the viewer is meant to be consumed inside the host's iframe. The port is `3000` by default and can be overridden with `OHIF_PORT`.
-
-### Terminal 2 — host app, port 5173
-
-```bash
-pnpm --filter host-app run dev
-```
-
-Then open **`http://localhost:5173`**. The host renders a two-column layout —
-a full-height iframe with the OHIF viewer on the left, the scoring form on
-the right — and installs its `message` listener before the iframe `src` is
-assigned. Once the viewer's bridge extension sends `VIEWER_READY`, the
-form becomes usable:
-
-1. Click **Add Measurement** to create a row, then click **Activate** on that row to arm `EllipticalROI` in the viewer.
-2. Draw an ellipse on the loaded image — the row moves through
-   `drawing → processing → ready` and shows the measured value with its
-   unit (e.g. `mm²`).
-3. Repeat for further rows. The **Total** panel at the bottom sums ready
-   rows grouped by their exact unit string — units are never mixed
-   together in one sum.
-4. To cancel an active or queued drawing intent, click **Cancel** while the row is in the `drawing` state. The row returns to `waiting` without affecting other rows or their totals.
-
-## Known-good study
-
-The viewer opens a specific study directly, which is the form the iframe URL takes:
-
-```
-http://localhost:3000/viewer?StudyInstanceUIDs=<StudyInstanceUID>
-```
-
-The host app's default (`apps/host-app/src/config.ts`, overridable via
-`VITE_VIEWER_STUDY_URL`) is:
-
-```
-http://localhost:3000/viewer?StudyInstanceUIDs=1.3.6.1.4.1.25403.345050719074.3824.20170125095438.5
-```
-
-Verified against the default public AWS S3 DICOMweb source
-(`platform/app/public/config/dev.js`) — the same study used by upstream
-OHIF's own "Measurement Tracking" demo link (root `README.md`). It loads an
-MR series with pixel spacing, so `EllipticalROI` yields an area in `mm²`.
+Prerequisites, install, run, and usage instructions now live in the
+[root `README.md`](../../README.md#prerequisites) — not duplicated here to
+avoid the two drifting apart.
 
 ## Troubleshooting
 
