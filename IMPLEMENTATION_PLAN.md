@@ -345,28 +345,33 @@ Fix: the bridge subscribes to `toolGroupService.EVENTS.PRIMARY_TOOL_ACTIVATED` (
 - Cancel is not offered/has no effect while a row is `processing`, and never deletes a completed annotation;
 - an `MEASUREMENT_UPDATED` arriving after the 200 ms settle window is observed to NOT be forwarded (documented limitation, not a bug).
 
-## PR 6 — `feat: add unit-safe totals and final required UX`
+## PR 6 — `feat: add unit-safe totals and final required UX` — ⏳ IMPLEMENTED AND VERIFIED, AWAITING MERGE (`adf132acc`; GitHub PR #6, branch `feat/unit-safe-totals`)
 
 ### Goal
 
 Complete the mandatory scenario.
 
-### Changes
+### Implemented
 
-- pure total calculation grouped by unit;
-- display total(s);
-- deterministic numeric formatting;
-- row status labels;
-- cancellation UI polish;
-- error/unsupported-unit behavior if needed;
-- small tests for:
-  - totals;
-  - protocol guard/serialization;
-  - stale activation handling if feasible.
+- pure `computeTotals(rows)` in `apps/host-app/src/form/totals.ts` — includes only `status === 'ready'` rows with a finite numeric value and non-empty unit, grouped by the **exact** unit string (`mm²` and `px²` never merged; calibrated suffixes like `mm² ERMF` kept distinct); the accumulator uses `Object.create(null)` so a unit literally named `constructor` cannot collide with an inherited property;
+- full-precision calculation — totals are summed unformatted; `.toFixed(2)` is applied only in `App.tsx` at render time, for both per-row ready values and the totals display, per `ARCHITECTURE.md` §7 ("values are stored unformatted; formatting is presentation-only");
+- totals UI: a single `Total:` label on the left with a vertical, right-aligned column of `<value> <unit>` lines on the right (one line per unit), a divider above it, and an explicit "No ready measurements yet." empty state;
+- sequential row display numbers (`#1, #2, …`), derived from array position (not `row.id`), shown in every row state; ready rows additionally show a small green "Ready" badge next to the number;
+- Tailwind CSS integrated into `apps/host-app` only — reused the exact versions already used across `platform/*` (`tailwindcss@3.2.4`, `postcss@8.5.26`, `autoprefixer@10.4.21`, hoisted at the repo root), with a host-app-local `tailwind.config.cjs`/`postcss.config.cjs` so Vite does not fall back to the repo-root `postcss.config.js` (which lacks the `tailwindcss` plugin) — OHIF's own styling is untouched;
+- 10 focused unit tests for `computeTotals` in `apps/host-app/src/form/totals.test.ts` (empty rows, non-ready rows excluded, single/multiple same-unit rows, mixed units, calibrated-unit suffix, decimal precision, non-finite/missing value excluded, empty/missing unit excluded, `"constructor"`-named unit) — **10/10 passing** via `node --loader ts-node/esm --test`, run under the documented baseline Node `24.15.0`;
+- `apps/host-app` scoped TypeScript check and production build (`vite build`) both pass with **zero errors**.
+
+### Not implemented in this PR
+
+- protocol guard/serialization tests and stale-activation-handling tests — both named as optional extras in the original plan, not written in this pass;
+- no new "unsupported unit" UI state was added — `computeTotals` excludes rows with missing or empty units, non-finite values, or non-ready status, and groups all other units by their exact strings. The reducer validates incoming `MEASUREMENT_ADDED` payloads;
+- the `packages/message-contract` Jest-project-glob question (`docs/scoring-form/IMPLEMENTATION_NOTES.md` §10 item 5) was not addressed by this PR — it remains open, since totals tests were written for `apps/host-app` via Node's built-in test runner instead.
 
 ### Verification
 
-Demo script:
+Automated (done): unit tests, scoped TypeScript check, and production build above.
+
+Manual demo script (partially verified; remaining scenarios pending before merge):
 
 1. start both apps;
 2. add three rows;
@@ -376,7 +381,7 @@ Demo script:
 6. show early activation while viewer loads;
 7. confirm no mixed-unit summation.
 
-At this point the mandatory scope should be submission-quality.
+Once the manual demo script above is run and confirmed, the mandatory scope should be submission-quality.
 
 ## PR 7 — `docs: finalize architecture, runbook, and AI usage`
 
